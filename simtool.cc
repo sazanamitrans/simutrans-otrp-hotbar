@@ -92,7 +92,6 @@
 #include "simtool.h"
 #include "player/finance.h"
 
-
 #define is_scenario()  welt->get_scenario()->is_scripted()
 
 #define CHECK_FUNDS() \
@@ -2129,7 +2128,7 @@ const char *tool_plant_tree_t::work( player_t *player, koord3d pos )
 	grund_t *gr = welt->lookup_kartenboden(k);
 	if(gr) {
 		// check if trees are allowed
-		if(  welt->get_settings().get_no_trees()  &&  !player->is_public_service()  ) {
+		if(  welt->get_settings().get_tree()==0  &&  !player->is_public_service()  ) {
 			return NOTICE_NO_TREES;
 		}
 
@@ -5695,7 +5694,7 @@ const char *tool_build_factory_t::work( player_t *player, koord3d pos )
 /**
  * link tool: links products of factory one with factory two (if possible)
  */
-image_id tool_link_factory_t::get_marker_image()
+image_id tool_link_factory_t::get_marker_image() const
 {
 	return cursor;
 }
@@ -5989,7 +5988,7 @@ const char *tool_forest_t::do_work( player_t *player, const koord3d &start, cons
 }
 
 
-image_id tool_stop_mover_t::get_marker_image()
+image_id tool_stop_mover_t::get_marker_image() const
 {
 	return cursor;
 }
@@ -6339,7 +6338,7 @@ const char *tool_make_stop_public_t::work( player_t *player, koord3d p )
 
 
 /* merge stop */
-image_id tool_merge_stop_t::get_marker_image()
+image_id tool_merge_stop_t::get_marker_image() const
 {
 	return cursor;
 }
@@ -6442,6 +6441,7 @@ const char *tool_merge_stop_t::do_work( player_t *player, const koord3d &last_po
 	// nothing to do
 	return NULL;
 }
+
 
 bool tool_show_trees_t::init( player_t * )
 {
