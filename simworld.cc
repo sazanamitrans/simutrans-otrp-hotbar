@@ -1362,7 +1362,7 @@ DBG_DEBUG("karte_t::init()","built timeline");
 
 	for (int i = 0; i < MAX_PLAYER_COUNT; i++) {
 		if(  players[i]  ) {
-			players[i]->set_active(settings.player_active[i]);
+			players[i]->set_active(true);
 		}
 	}
 
@@ -3061,7 +3061,6 @@ bool karte_t::change_player_tool(uint8 cmd, uint8 player_nr, uint16 param, bool 
 				player_t *player = get_player(player_nr);
 				if (param != player_t::HUMAN  &&  player) {
 					player->set_active(true);
-					settings.set_player_active(player_nr, player->is_active());
 				}
 			}
 			return true;
@@ -3078,7 +3077,6 @@ bool karte_t::change_player_tool(uint8 cmd, uint8 player_nr, uint16 param, bool 
 			if (exec) {
 				player_t *player = get_player(player_nr);
 				player->set_active(param != 0);
-				settings.set_player_active(player_nr, player->is_active());
 			}
 			return true;
 		}
@@ -3121,7 +3119,7 @@ void karte_t::set_tool( tool_t *tool_in, player_t *player )
 		return;
 	}
 	// check for password-protected players
-	if(  (!tool_in->is_init_network_save()  ||  !tool_in->is_work_network_save())  &&  needs_check  &&
+	if(  (!tool_in->is_init_network_safe()  ||  !tool_in->is_work_network_safe())  &&  needs_check  &&
 		 !(tool_in->get_id()==(TOOL_CHANGE_PLAYER|SIMPLE_TOOL)  ||  tool_in->get_id()==(TOOL_ADD_MESSAGE|SIMPLE_TOOL))  &&
 		 player  &&  player->is_locked()  ) {
 		// player is currently password protected => request unlock first
@@ -3129,7 +3127,7 @@ void karte_t::set_tool( tool_t *tool_in, player_t *player )
 		return;
 	}
 	tool_in->flags |= event_get_last_control_shift();
-	if(!env_t::networkmode  ||  tool_in->is_init_network_save()  ) {
+	if(!env_t::networkmode  ||  tool_in->is_init_network_safe()  ) {
 		local_set_tool(tool_in, player);
 	}
 	else {
@@ -3147,7 +3145,7 @@ void karte_t::local_set_tool( tool_t *tool_in, player_t * player )
 	// now call init
 	bool init_result = tool_in->init(player);
 	// for unsafe tools init() must return false
-	assert(tool_in->is_init_network_save()  ||  !init_result);
+	assert(tool_in->is_init_network_safe()  ||  !init_result);
 
 	if (player  && init_result  &&  !tool_in->is_scripted()) {
 
@@ -5683,10 +5681,6 @@ DBG_MESSAGE("karte_t::load()", "%d convois/trains loaded", convoi_array.get_coun
 	for(int i=0; i<MAX_PLAYER_COUNT; i++) {
 		if(  players[i]  ) {
 			players[i]->rdwr(file);
-			settings.player_active[i] = players[i]->is_active();
-		}
-		else {
-			settings.player_active[i] = false;
 		}
 		ls.set_progress( (get_size().y*3)/2+128+8*i );
 	}
@@ -6837,7 +6831,7 @@ void karte_t::network_game_set_pause(bool pause_, uint32 syncsteps_)
 const char* karte_t::call_work(tool_t *tool, player_t *player, koord3d pos, bool &suspended)
 {
 	const char *err = NULL;
-	if (!env_t::networkmode  ||  tool->is_work_network_save()  ||  tool->is_work_here_network_save( player, pos) ) {
+	if (!env_t::networkmode  ||  tool->is_work_network_safe()  ||  tool->is_work_here_network_save( player, pos) ) {
 		// do the work
 		tool->flags |= tool_t::WFL_LOCAL;
 		// check allowance by scenario
