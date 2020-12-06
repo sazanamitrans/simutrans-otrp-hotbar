@@ -9,7 +9,7 @@
 
 #include "../../display/simimg.h"
 #include "../../simtypes.h"
-#include "../../simobj.h"
+#include "../../obj/simobj.h"
 #include "../../descriptor/way_desc.h"
 #include "../../dataobj/koord3d.h"
 
@@ -49,14 +49,14 @@ public:
 	static const slist_tpl <weg_t *> & get_alle_wege();
 
 	enum {
-		HAS_SIDEWALK   = 0x01,
-		IS_ELECTRIFIED = 0x02,
-		HAS_SIGN       = 0x04,
-		HAS_SIGNAL     = 0x08,
-		HAS_WAYOBJ     = 0x10,
-		HAS_CROSSING   = 0x20,
-		IS_DIAGONAL    = 0x40, // marker for diagonal image
-		IS_SNOW        = 0x80  // marker, if above snowline currently
+		HAS_SIDEWALK   = 1 << 0,
+		IS_ELECTRIFIED = 1 << 1,
+		HAS_SIGN       = 1 << 2,
+		HAS_SIGNAL     = 1 << 3,
+		HAS_WAYOBJ     = 1 << 4,
+		HAS_CROSSING   = 1 << 5,
+		IS_DIAGONAL    = 1 << 6, // marker for diagonal image
+		IS_SNOW        = 1 << 7  // marker, if above snowline currently
 	};
 
 private:
@@ -108,14 +108,6 @@ private:
 
 protected:
 
-	enum image_type { image_flat, image_slope, image_diagonal, image_switch };
-
-	/**
-	 * initializes both front and back images
-	 * switch images are set in schiene_t::reserve
-	 */
-	void set_images(image_type typ, uint8 ribi, bool snow, bool switch_nw=false);
-
 public:
 	weg_t(loadsave_t*) : obj_no_info_t() { init(); }
 	weg_t() : obj_no_info_t() { init(); }
@@ -131,6 +123,20 @@ public:
 	 * Actual image recalculation
 	 */
 	void calc_image() OVERRIDE;
+
+	enum image_type {
+		image_flat,
+		image_slope,
+		image_diagonal,
+		image_switch
+	};
+
+	/**
+	 * initializes both front and back images
+	 * switch images are set in schiene_t::reserve
+	 * needed by tunnel mouths
+	 */
+	void set_images(image_type typ, uint8 ribi, bool snow, bool switch_nw = false);
 
 	/**
 	 * Called whenever the season or snowline height changes

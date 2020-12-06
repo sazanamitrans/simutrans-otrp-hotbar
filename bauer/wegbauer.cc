@@ -34,6 +34,7 @@
 #include "../boden/monorailboden.h"
 #include "../boden/tunnelboden.h"
 #include "../boden/grund.h"
+#include "../boden/wasser.h"
 
 #include "../dataobj/environment.h"
 #include "../dataobj/route.h"
@@ -57,6 +58,7 @@
 
 #include "../ifc/simtestdriver.h"
 
+#include "../tpl/array_tpl.h"
 #include "../tpl/stringhashtable_tpl.h"
 
 #include "../gui/minimap.h" // for debugging
@@ -368,7 +370,7 @@ bool way_builder_t::check_crossing(const koord zv, const grund_t *bd, waytype_t 
 		return false;
 	}
 	// crossing available and ribis ok
-	if(crossing_logic_t::get_crossing(wtyp, w->get_waytype(), 0, 0, welt->get_timeline_year_month())!=NULL) {
+	if(crossing_logic_t::get_crossing(wtyp, w->get_waytype(), desc ? desc->get_topspeed() : 0, w->get_max_speed(), welt->get_timeline_year_month())!=NULL) {
 		ribi_t::ribi w_ribi = w->get_ribi_unmasked();
 		// it is our way we want to cross: can we built a crossing here?
 		// both ways must be straight and no ends
@@ -2724,10 +2726,10 @@ void way_builder_t::build_track()
 					}
 
 					for(  int j = 0;  j < 4;  j++  ) {
-						if (ribi_t::nsew[j] & slope_ribi) {
+						if (ribi_t::nesw[j] & slope_ribi) {
 							grund_t *sea = NULL;
-							if (gr->get_neighbour(sea, invalid_wt, ribi_t::nsew[j])  &&  sea->is_water()  ) {
-								gr->weg_erweitern( water_wt, ribi_t::nsew[j] );
+							if (gr->get_neighbour(sea, invalid_wt, ribi_t::nesw[j])  &&  sea->is_water()  ) {
+								gr->weg_erweitern( water_wt, ribi_t::nesw[j] );
 								sea->calc_image();
 							}
 						}
@@ -2809,7 +2811,7 @@ class fluss_test_driver_t : public test_driver_t
 	ribi_t::ribi get_ribi(const grund_t* gr) const OVERRIDE { return gr->get_weg_ribi_unmasked(water_wt); }
 	waytype_t get_waytype() const OVERRIDE { return invalid_wt; }
 	int get_cost(const grund_t *, const weg_t *, const sint32, ribi_t::ribi) const OVERRIDE { return 1; }
-	bool is_target(const grund_t *cur,const grund_t *) const OVERRIDE { return cur->is_water()  &&  cur->get_grund_hang()==slope_t::flat; }
+	bool is_target(const grund_t *cur,const grund_t *) const OVERRIDE { return cur->is_water()  &&  cur->get_hoehe()<=world()->get_groundwater(); }
 };
 
 
@@ -2822,12 +2824,30 @@ void way_builder_t::build_river()
 	 * route.front() tile at the ocean, route.back() the spring of the river
 	 */
 
-	// Do we join an other river?
 	uint32 start_n = 0;
+	uint32 end_n = get_count();
+	// first find coast ...
 	for(  uint32 idx=start_n;  idx<get_count();  idx++  ) {
-		if(  welt->lookup(route[idx])->hat_weg(water_wt)  ||  welt->lookup(route[idx])->get_hoehe() == welt->get_water_hgt(route[idx].get_2d())  ) {
+		if(  welt->lookup(route[idx])->get_hoehe() == welt->get_water_hgt(route[idx].get_2d())  ) {
 			start_n = idx;
 		}
+		else {
+			break;
+		}
+	}
+	// Do we join an other river?
+	for(  uint32 idx=start_n;  idx<get_count();  idx++  ) {
+		if( welt->lookup( route[idx] )->get_weg(water_wt)  ) {
+			// river or channel
+			start_n = idx;
+		}
+	}
+	// No spring on a slope
+	while(  end_n>start_n  ) {
+		if(  welt->lookup( route[end_n-1] )->get_grund_hang() == slope_t::flat  ) {
+			break;
+		}
+		end_n --;
 	}
 	if(  start_n == get_count()-1  ) {
 		// completely joined another river => nothing to do
@@ -2835,37 +2855,70 @@ void way_builder_t::build_river()
 	}
 
 	// first check then lower riverbed
-	const sint8 start_h = route[start_n].z;
-	uint32 end_n = get_count();
-	uint32 i = start_n;
-	while(i<get_count()) {
-		// first find all tiles that are on the same level as tile i
-		// and check whether we can lower all of them
-		// if lowering fails we do not continue river building
-		bool ok = true;
-		uint32 j;
-		for(j=i; j<get_count() &&  ok; j++) {
-			// one step higher?
-			if (route[j].z > route[i].z) break;
-			// check
-			ok = welt->can_flatten_tile(NULL, route[j].get_2d(), max(route[j].z-1, start_h));
+	sint8 start_h = max(route[start_n].z,welt->get_groundwater());
+	vector_tpl<bool> lower_tile( end_n );    // This contains the tiles which can be lowered.
+	vector_tpl<sint8> lower_tile_h( end_n ); // to this value
+
+	// first: find possible valley
+	for( uint32 i=0;  i < end_n;  i++  ) {
+
+		bool can_lower = true;
+
+		if(  route[i].z < start_h   ) {
+			// skip all tiles below last sea level
+			can_lower = false;
 		}
-		// now lower all tiles that have the same height as tile i
-		for(uint32 k=i; k<j; k++) {
-			welt->flatten_tile(NULL, route[k].get_2d(), max(route[k].z-1, start_h));
+
+		grund_t *gr = welt->lookup( route[i] );
+		if(  gr->is_water()  ) {
+			// not lowering the sea or lakes
+			start_h = welt->get_water_hgt( route[i].get_2d() );
+			can_lower = false;
 		}
-		if (!ok) {
-			end_n = j;
-			break;
+
+		if(  gr->hat_weg(water_wt)  ) {
+			// not lowering exiting rivers
+			start_h = route[i].z;
+			can_lower = false;
 		}
-		i = j;
+
+		// check
+		if(  can_lower  ) {
+			can_lower = welt->can_flatten_tile( NULL, route[i].get_2d(), max( route[i].z-1, start_h ) );
+		}
+
+		lower_tile.append( can_lower );
+		lower_tile_h.append( start_h );
+
+		sint8 current_h = route[i].z+slope_t::max_diff(gr->get_grund_hang());
+		if(  current_h > start_h + 1  ) {
+			start_h++;
+		}
 	}
-	// nothing to built ?
-	if (start_n >= end_n-1) {
-		return;
+
+	// now lower all tiles
+	for(  uint32 i=start_n;  i<end_n;  i++  ) {
+		if(  lower_tile[i]  ) {
+			if(  !welt->flatten_tile( NULL, route[i].get_2d(), lower_tile_h[i] ) ) {
+				// illegal slope encountered, give up ...
+				return;
+			}
+		}
+	}
+
+	// and raise all tiles that resulted in slopes on curves
+	for( uint32 i = end_n - 2; i > start_n+1;   i-- ) {
+		grund_t *gr = welt->lookup_kartenboden( route[i].get_2d() );
+		if(  !gr->get_weg_ribi( water_wt )  &&  gr->get_grund_hang()!=slope_t::flat  ) {
+			if(  !ribi_t::is_straight(ribi_type(route[i+1].get_2d()-route[i-1].get_2d()))  ) {
+				welt->flatten_tile( NULL, route[i].get_2d(), gr->get_hoehe()+1 );
+				DBG_MESSAGE( "wrong river slope", route[i].get_str() );
+			}
+		}
 	}
 
 	// now build the river
+	uint32 last_common_water_tile = start_n;
 	grund_t *gr_first = NULL;
 	for(  uint32 i=start_n;  i<end_n;  i++  ) {
 		grund_t* gr = welt->lookup_kartenboden(route[i].get_2d());
@@ -2877,30 +2930,36 @@ void way_builder_t::build_river()
 			ribi_t::ribi ribi = i<end_n-1 ? route.get_short_ribi(i) : ribi_type(route[i-1]-route[i]);
 			bool extend = gr->weg_erweitern(water_wt, ribi);
 			if(  !extend  ) {
-				weg_t *sch=weg_t::alloc(water_wt);
-				sch->set_desc(desc);
-				gr->neuen_weg_bauen(sch, ribi, NULL);
+				weg_t *river=weg_t::alloc(water_wt);
+				river->set_desc(desc);
+				gr->neuen_weg_bauen(river, ribi, NULL);
 			}
+			else {
+				last_common_water_tile = i;
+			}
+		}
+		else {
+			dynamic_cast<wasser_t *>(gr)->recalc_water_neighbours();
+			last_common_water_tile = i;
 		}
 	}
 	gr_first->calc_image(); // to calculate ribi of water tiles
 
 	// we will make rivers gradually larger by stepping up their width
-	if(  env_t::river_types>1  &&  start_n<get_count()) {
-		/* since we will stop at the first crossing with an existent river,
-		 * we cannot make sure, we have the same destination;
-		 * thus we use the routefinder to find the sea
-		 */
+	// Since we cannot quickly find out, if a lake has another influx, we just assume all rivers after a lake are navigatable
+	if(  env_t::river_types>1  ) {
+		// now all rivers will end in the sea (or a lake) and thus there must be a valid route!
+		// unless weare the first and there is no lake on the way.
 		route_t to_the_sea;
 		fluss_test_driver_t river_tester;
-		if (to_the_sea.find_route(welt, welt->lookup_kartenboden(route[start_n].get_2d())->get_pos(), &river_tester, 0, ribi_t::all, 0x7FFFFFFF)) {
+		if (to_the_sea.calc_route(welt, welt->lookup_kartenboden(route[last_common_water_tile].get_2d())->get_pos(), welt->lookup_kartenboden(route[0].get_2d())->get_pos(), &river_tester, 0, 0x7FFFFFFF)) {
 			FOR(koord3d_vector_t, const& i, to_the_sea.get_route()) {
 				if (weg_t* const w = welt->lookup(i)->get_weg(water_wt)) {
 					int type;
 					for(  type=env_t::river_types-1;  type>0;  type--  ) {
 						// lookup type
 						if(  w->get_desc()==desc_table.get(env_t::river_type[type])  ) {
-							break;
+								break;
 						}
 					}
 					// still room to expand

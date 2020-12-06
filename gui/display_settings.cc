@@ -24,8 +24,12 @@
 #include "loadfont_frame.h"
 #include "simwin.h"
 
+// display text label in player colors
+void display_text_label(sint16 xpos, sint16 ypos, const char* text, const player_t *player, bool dirty); // grund.cc
+
 enum {
 	IDBTN_SCROLL_INVERSE,
+	IDBTN_IGNORE_NUMLOCK,
 	IDBTN_PEDESTRIANS_AT_STOPS,
 	IDBTN_PEDESTRIANS_IN_TOWNS,
 	IDBTN_DAY_NIGHT_CHANGE,
@@ -43,7 +47,7 @@ enum {
 	IDBTN_SHOW_THEMEMANAGER,
 	IDBTN_SIMPLE_DRAWING,
 	IDBTN_CHANGE_FONT,
-	COLORS_MAX_BUTTONS,
+	COLORS_MAX_BUTTONS
 };
 
 static button_t buttons[COLORS_MAX_BUTTONS];
@@ -61,28 +65,10 @@ public:
 	{
 		scr_coord p = pos + offset;
 
-		FLAGGED_PIXVAL pc = welt->get_active_player() ? color_idx_to_rgb(welt->get_active_player()->get_player_color1()+3) : color_idx_to_rgb(COL_ORANGE);
+		const player_t* player = welt->get_active_player();
 		const char *text = get_text_pointer();
 
-		char ddd[ 16 ];
-		sprintf( ddd, "%d", env_t::show_names );
-		display_proportional_rgb( p.x, p.y + get_size().h/2, ddd, 0, color_idx_to_rgb(COL_BLACK), 1 );
-		p.x += 20;
-		switch( env_t::show_names>>2 ) {
-		case 0:
-			if(  env_t::show_names & 1  ) {
-				display_ddd_proportional_clip( p.x, p.y + get_size().h/2, proportional_string_width(text)+7, 0, pc, color_idx_to_rgb(COL_BLACK), text, 1 );
-			}
-			break;
-		case 1:
-			display_outline_proportional_rgb( p.x, p.y, pc+1, color_idx_to_rgb(COL_BLACK), text, 1 );
-			break;
-		case 2:
-			display_outline_proportional_rgb( p.x + LINESPACE + D_H_SPACE, p.y, color_idx_to_rgb(COL_YELLOW), color_idx_to_rgb(COL_BLACK), text, 1 );
-			display_ddd_box_clip_rgb(         p.x,                     p.y,   LINESPACE,   LINESPACE,   pc-2, pc+2 );
-			display_fillbox_wh_clip_rgb(      p.x+1,                   p.y+1, LINESPACE-2, LINESPACE-2, pc,   true);
-			break;
-		}
+		display_text_label(p.x, p.y + get_size().h/2, text, player, true);
 	}
 
 	scr_size get_min_size() const OVERRIDE
@@ -207,6 +193,11 @@ map_settings_t::map_settings_t()
 	// Scroll inverse checkbox
 	buttons[ IDBTN_SCROLL_INVERSE ].init( button_t::square_state, "4LIGHT_CHOOSE" );
 	add_component( buttons + IDBTN_SCROLL_INVERSE, 2 );
+
+	// Numpad key
+	buttons[ IDBTN_IGNORE_NUMLOCK ].init( button_t::square_state, "Num pad keys always move map" );
+	buttons[ IDBTN_IGNORE_NUMLOCK ].pressed = env_t::numpad_always_moves_map;
+	add_component( buttons + IDBTN_IGNORE_NUMLOCK, 2 );
 
 	// Scroll speed label
 	new_component<gui_label_t>( "3LIGHT_CHOOSE" );
@@ -471,6 +462,10 @@ bool color_gui_t::action_triggered( gui_action_creator_t *comp, value_t)
 
 	switch( i )
 	{
+	case IDBTN_IGNORE_NUMLOCK:
+		env_t::numpad_always_moves_map = !env_t::numpad_always_moves_map;
+		buttons[IDBTN_IGNORE_NUMLOCK].pressed = env_t::numpad_always_moves_map;
+		break;
 	case IDBTN_SCROLL_INVERSE:
 		env_t::scroll_multi = -env_t::scroll_multi;
 		break;
@@ -591,7 +586,7 @@ void color_gui_t::draw(scr_coord pos, scr_size size)
 	buttons[IDBTN_UNDERGROUND_VIEW].pressed = grund_t::underground_mode == grund_t::ugm_all;
 	buttons[IDBTN_TRANSPARENT_STATION_COVERAGE].pressed = env_t::use_transparency_station_coverage;
 	buttons[IDBTN_TRANSPARENT_INSTEAD_OF_HIDDEN].pressed = env_t::hide_with_transparency;
-	
+
 
 	// All components are updated, now draw them...
 	gui_frame_t::draw(pos, size);

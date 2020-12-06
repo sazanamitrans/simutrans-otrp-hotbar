@@ -25,7 +25,6 @@
 
 #include "gui/minimap.h"
 #include "gui/convoi_info_t.h"
-#include "gui/schedule_gui.h"
 #include "gui/depot_frame.h"
 #include "gui/messagebox.h"
 #include "gui/convoi_detail_t.h"
@@ -48,13 +47,17 @@
 #include "obj/roadsign.h"
 #include "obj/wayobj.h"
 
-#include "vehicle/simroadtraffic.h"
-#include "vehicle/simvehicle.h"
-#include "vehicle/overtaker.h"
 
 #include "utils/simrandom.h"
 #include "utils/simstring.h"
 #include "utils/cbuffer_t.h"
+
+#include "vehicle/air_vehicle.h"
+#include "vehicle/overtaker.h"
+#include "vehicle/rail_vehicle.h"
+#include "vehicle/road_vehicle.h"
+#include "vehicle/simroadtraffic.h"
+#include "vehicle/water_vehicle.h"
 
 
 /*
@@ -1828,11 +1831,13 @@ bool convoi_t::set_schedule(schedule_t * f)
 				unregister_stops();
 			}
 		}
+#ifdef BAD_IDEA
 		// destroy a possibly open schedule window
 		if(  schedule  &&  !schedule->is_editing_finished()  ) {
 			destroy_win((ptrdiff_t)schedule);
 			delete schedule;
 		}
+#endif
 		schedule = f;
 		if(  changed  ) {
 			// if line is unset or schedule is changed
@@ -2735,7 +2740,12 @@ void convoi_t::open_schedule_window( bool show )
 
 	if(  show  ) {
 		// Open schedule dialog
-		create_win( new schedule_gui_t(schedule,get_owner(),self), w_info, (ptrdiff_t)schedule );
+		if( convoi_info_t *info = dynamic_cast<convoi_info_t*>(win_get_magic( magic_convoi_info + self.get_id() )) ) {
+			info->change_schedule();
+		}
+		else {
+			create_win( new convoi_info_t(self,true), w_info, (ptrdiff_t)schedule );
+		}
 		// TODO: what happens if no client opens the window??
 	}
 	schedule->start_editing();
@@ -3252,9 +3262,9 @@ sint64 convoi_t::get_purchase_cost() const
 */
 void convoi_t::set_line(linehandle_t org_line)
 {
-	// to remove a convoi from a line, call unset_line(); passing a NULL is not allowed!
+	// to remove a convoi from a line, call unset_line()
 	if(!org_line.is_bound()) {
-		return;
+		unset_line();
 	}
 	if(  line.is_bound()  ) {
 		unset_line();
@@ -3724,7 +3734,7 @@ bool convoi_t::can_overtake(overtaker_t *other_overtaker, sint32 other_speed, si
 
 	// Furthermore, if we reach the end of the route for a vehcile as fast as us,
 	// we simply assume it to be ok too
-	sint32 overtaking_distance = time_overtaking; 
+	sint32 overtaking_distance = time_overtaking;
 	distance = 0; // distance to needed traveled to crash int us from this point
 	time_overtaking = (time_overtaking << 16)/akt_speed;
 	while(  time_overtaking > 0  ) {

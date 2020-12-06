@@ -46,9 +46,9 @@
 #include "boden/wasser.h"
 
 #include "old_blockmanager.h"
-#include "vehicle/simvehicle.h"
+#include "vehicle/vehicle.h"
 #include "vehicle/simroadtraffic.h"
-#include "vehicle/simpeople.h"
+#include "vehicle/pedestrian.h"
 #include "vehicle/movingobj.h"
 #include "boden/wege/schiene.h"
 
@@ -267,21 +267,6 @@ void karte_t::world_xy_loop(xy_loop_func function, uint8 flags)
 	// slow serial way of display
 	(this->*function)( 0, max_x, 0, max_y );
 #endif
-}
-
-
-void checklist_t::rdwr(memory_rw_t *buffer)
-{
-	buffer->rdwr_long(random_seed);
-	buffer->rdwr_short(halt_entry);
-	buffer->rdwr_short(line_entry);
-	buffer->rdwr_short(convoy_entry);
-}
-
-
-int checklist_t::print(char *buffer, const char *entity) const
-{
-	return sprintf(buffer, "%s=[rand=%u halt=%u line=%u cnvy=%u] ", entity, random_seed, halt_entry, line_entry, convoy_entry);
 }
 
 
@@ -714,7 +699,8 @@ void karte_t::create_rivers( sint16 number )
 	}
 
 	// create a vector of the highest points
-	vector_tpl<koord> water_tiles;
+	vector_tpl<koord> lake_tiles;
+	vector_tpl<koord> sea_tiles;
 	weighted_vector_tpl<koord> mountain_tiles;
 
 	sint8 last_height = 1;
@@ -729,7 +715,12 @@ void karte_t::create_rivers( sint16 number )
 			const sint8 h = gr->get_hoehe() - get_water_hgt_nocheck(k);
 			if(  gr->is_water()  ) {
 				// may be good to start a river here
-				water_tiles.append(k);
+				if( gr->get_hoehe() <= get_groundwater() ) {
+					sea_tiles.append(k);
+				}
+				else {
+					lake_tiles.append(k);
+				}
 			}
 			else if(  h>=last_height  ||  koord_distance(last_koord,k)>simrand(max_dist)  ) {
 				// something worth to add here
@@ -743,6 +734,7 @@ void karte_t::create_rivers( sint16 number )
 			}
 		}
 	}
+	vector_tpl<koord> water_tiles( sea_tiles.empty() ? lake_tiles : sea_tiles );
 	if (water_tiles.empty()) {
 		dbg->message("karte_t::create_rivers()","There aren't any water tiles!\n");
 		return;
@@ -815,7 +807,7 @@ void karte_t::distribute_groundobjs_cities(int new_city_count, sint32 new_mean_c
 #endif
 			for(  int i=0;  i<new_city_count;  i++  ) {
 				stadt_t* s = new stadt_t(players[1], (*pos)[i], 1 );
-				DBG_DEBUG("karte_t::distribute_groundobjs_cities()","Erzeuge stadt %i with %ld inhabitants",i,(s->get_city_history_month())[HIST_CITICENS] );
+				DBG_DEBUG("karte_t::distribute_groundobjs_cities()","Erzeuge stadt %i with %ld inhabitants",i,(s->get_city_history_month())[HIST_CITIZENS] );
 				if (s->get_buildings() > 0) {
 					add_city(s);
 				}
@@ -890,7 +882,7 @@ void karte_t::distribute_groundobjs_cities(int new_city_count, sint32 new_mean_c
 			msg->clear();
 		}
 		finance_history_year[0][WORLD_TOWNS] = finance_history_month[0][WORLD_TOWNS] = stadt.get_count();
-		finance_history_year[0][WORLD_CITICENS] = finance_history_month[0][WORLD_CITICENS] = last_month_bev;
+		finance_history_year[0][WORLD_CITIZENS] = finance_history_month[0][WORLD_CITIZENS] = last_month_bev;
 
 		// connect some cities with roads
 		way_desc_t const* desc = settings.get_intercity_road_type(get_timeline_year_month());
@@ -1272,58 +1264,13 @@ DBG_DEBUG("karte_t::init()","init_tiles");
 
 	script_api::new_world();
 
-DBG_DEBUG("karte_t::init()","distributing trees");
-	switch (settings.get_tree()) {
-		case 2:
-		if( humidity_map.get_height() != 0 ) {
-			koord pos;
-			for(  pos.y=0;  pos.y<get_size().y;  pos.y++  ) {
-				for(  pos.x=0;  pos.x<get_size().x;  pos.x++  ) {
-					grund_t *gr = lookup_kartenboden(pos);
-					if(gr->get_top() == 0  &&  gr->get_typ() == grund_t::boden)  {
-						if(humidity_map.at(pos.x,pos.y)>75) {
-							const uint32 tree_probability = (humidity_map.at(pos.x,pos.y) - 75)/5 + 38;
-							uint8 number_to_plant = 0;
-							uint8 const max_trees_here = min(get_settings().get_max_no_of_trees_on_square(), (tree_probability - 38 + 1) / 2);
-							for (uint8 c2 = 0 ; c2<max_trees_here; c2++) {
-								const uint32 rating = simrand(10) + 38 + c2*2;
-								if (rating < tree_probability ) {
-									number_to_plant++;
-								}
-							}
-							baum_t::plant_tree_on_coordinate(pos, get_settings().get_max_no_of_trees_on_square(), number_to_plant);
-						}
-						else if(humidity_map.at(pos.x,pos.y)>75) {
-							// plant spare trees, (those with low preffered density) or in an entirely tree climate
-							uint16 cl = 1 << get_climate(pos);
-							settings_t const& s = get_settings();
-							if ((cl & s.get_no_tree_climates()) == 0 && ((cl & s.get_tree_climates()) != 0 || simrand(s.get_forest_inverse_spare_tree_density() * /*dichte*/3) < 100)) {
-								baum_t::plant_tree_on_coordinate(pos, 1, 1);
-							}
-						}
-					}
-				}
-
-			}
-			break;
-		}
-		case 1:
-			// no humidity data or on request
-			baum_t::distribute_trees(3);
-			break;
-		case 0:
-			// no trees
-			break;
-	}
-	humidity_map.clear();
-
 DBG_DEBUG("karte_t::init()","built timeline");
 	private_car_t::build_timeline_list(this);
 	pedestrian_t::build_timeline_list(this);
 
 	nosave_warning = nosave = false;
 
-	dbg->error("karte_t::init()", "Creating factories ...");
+	dbg->message("karte_t::init()", "Creating factories ...");
 	factory_builder_t::new_world();
 
 	int consecutive_build_failures = 0;
@@ -1641,10 +1588,15 @@ void karte_t::create_beaches(  int xoff, int yoff  )
 				bool water[8];
 				// check whether nearby tiles are water
 				for(  int i = 0;  i < 8;  i++  ) {
-					grund_t *gr2 = lookup_kartenboden( k + koord::neighbours[i] );
-					water[i] = (!gr2  ||  gr2->is_water());
+					if(  grund_t *gr2 = lookup_kartenboden( k + koord::neighbours[i] )  ) {
+						if( gr2->hat_weg( water_wt ) ) {
+							// never ever make a beach near a river mound
+							neighbour_water = 8;
+							break;
+						}
+						water[i] = (!gr2  ||  gr2->is_water());
+					}
 				}
-
 				// make a count of nearby tiles - where tiles on opposite (+-1 direction) sides are water these count much more so we don't block straits
 				for(  int i = 0;  i < 8;  i++  ) {
 					if(  water[i]  ) {
@@ -1726,15 +1678,16 @@ void karte_t::create_beaches(  int xoff, int yoff  )
 void karte_t::init_height_to_climate()
 {
 	// mark unused as arctic
-	memset( height_to_climate, arctic_climate, lengthof(height_to_climate) );
-	memset( height_to_climate, temperate_climate, max( 0, settings.get_climate_borders(arctic_climate,1)-groundwater ) );
 	memset( num_climates_at_height, 0, lengthof(num_climates_at_height) );
 
 	// now just add them, the later climates will win (we will do a fineer assessment later
 	for( int cl=0;  cl<MAX_CLIMATES;  cl++ ) {
 		DBG_DEBUG( "init_height_to_climate()", "climate %i, start %i end %i", cl,  settings.get_climate_borders( cl, 0 ),  settings.get_climate_borders( cl, 1 ) );
 		for( sint8 h = max(groundwater, settings.get_climate_borders( cl, 0 )); h < settings.get_climate_borders( cl, 1 ); h++ ) {
-			height_to_climate[h-groundwater] = (uint8)cl;
+			if(  num_climates_at_height[ h - groundwater ] == 0  ) {
+				// default climate for this height is the first matching one
+				height_to_climate[ h - groundwater ] = (uint8)cl;
+			}
 			num_climates_at_height[h-groundwater]++;
 		}
 	}
@@ -1742,14 +1695,65 @@ void karte_t::init_height_to_climate()
 		if(  num_climates_at_height[h]==0  ) {
 			if( h == 0 ) {
 				height_to_climate[ h ] = desert_climate;
-				num_climates_at_height[ h ] = 1;
 			}
 			else if( h - groundwater > settings.get_climate_borders( arctic_climate, 1 ) ) {
 				height_to_climate[ h ] = arctic_climate;
-				num_climates_at_height[ h ] = 1;
 			}
+			else {
+				height_to_climate[ h ] = temperate_climate;
+			}
+			num_climates_at_height[ h ] = 1;
 		}
 		DBG_DEBUG( "init_height_to_climate()", "Height %i, climate %i, num_climates %i", h - groundwater, height_to_climate[ h ], num_climates_at_height[ h ] );
+	}
+}
+
+
+void karte_t::distribute_trees_region( sint16 xtop, sint16 ytop, sint16 xbottom, sint16 ybottom  )
+{
+	// now distribute trees
+	DBG_DEBUG("karte_t::init()","distributing trees");
+	switch (settings.get_tree()) {
+	case 2:
+		if( humidity_map.get_height() != 0 ) {
+			koord pos;
+			for(  pos.y=ytop;  pos.y<ybottom;  pos.y++  ) {
+				for(  pos.x=xtop;  pos.x<xbottom;  pos.x++  ) {
+					grund_t *gr = lookup_kartenboden(pos);
+					if(gr->get_top() == 0  &&  gr->get_typ() == grund_t::boden)  {
+						if(humidity_map.at(pos.x,pos.y)>75) {
+							const uint32 tree_probability = (humidity_map.at(pos.x,pos.y) - 75)/5 + 38;
+							uint8 number_to_plant = 0;
+							uint8 const max_trees_here = min(get_settings().get_max_no_of_trees_on_square(), (tree_probability - 38 + 1) / 2);
+							for (uint8 c2 = 0 ; c2<max_trees_here; c2++) {
+								const uint32 rating = simrand(10) + 38 + c2*2;
+								if (rating < tree_probability ) {
+									number_to_plant++;
+								}
+							}
+							baum_t::plant_tree_on_coordinate(pos, get_settings().get_max_no_of_trees_on_square(), number_to_plant);
+						}
+						else if(humidity_map.at(pos.x,pos.y)>75) {
+							// plant spare trees, (those with low preffered density) or in an entirely tree climate
+							uint16 cl = 1 << get_climate(pos);
+							settings_t const& s = get_settings();
+							if ((cl & s.get_no_tree_climates()) == 0 && ((cl & s.get_tree_climates()) != 0 || simrand(s.get_forest_inverse_spare_tree_density() * /*dichte*/3) < 100)) {
+								baum_t::plant_tree_on_coordinate(pos, 1, 1);
+							}
+						}
+					}
+				}
+
+			}
+			break;
+		}
+	case 1:
+		// no humidity data or on request
+		baum_t::distribute_trees(3, xtop, ytop, xbottom, ybottom );
+		break;
+	case 0:
+		// no trees
+		break;
 	}
 }
 
@@ -1936,12 +1940,13 @@ void karte_t::enlarge_map(settings_t const* sets, sint8 const* const h_field)
 	}
 
 	DBG_DEBUG("karte_t::distribute_groundobjs_cities()","distributing rivers");
-	if(  env_t::river_types > 0  &&  settings.get_river_number() > 0  ) {
-		create_rivers( settings.get_river_number() );
+	if(  sets->get_lakeheight() > get_groundwater()  ) {
+		create_lakes( old_x, old_y, sets->get_lakeheight() );
 	}
 
-	if(  sets->get_lakeheight()>0  ) {
-		create_lakes( old_x, old_y, sets->get_lakeheight() );
+	// so at least some rivers end or start in lakes
+	if(  env_t::river_types > 0  &&  settings.get_river_number() > 0  ) {
+		create_rivers( settings.get_river_number() );
 	}
 
 	if (  old_x == 0  &&  old_y == 0  ) {
@@ -1991,6 +1996,15 @@ void karte_t::enlarge_map(settings_t const* sets, sint8 const* const h_field)
 			lookup_kartenboden_nocheck(x,y)->calc_image();
 		}
 	}
+
+	if( old_x == 0   &&  old_y == 0 ) {
+		distribute_trees_region( 0, 0, new_size_x, new_size_y );
+	}
+	else {
+		distribute_trees_region( 0, old_y, old_x, new_size_y );
+		distribute_trees_region( old_x, 0, new_size_x, new_size_y );
+	}
+	humidity_map.clear();
 
 	// eventual update origin
 	switch(  settings.get_rotation()  ) {
@@ -2128,7 +2142,7 @@ karte_t::karte_t() :
 
 	for(int i=0; i<MAX_PLAYER_COUNT ; i++) {
 		players[i] = NULL;
-		MEMZERO(player_password_hash[i]);
+		player_password_hash[i].clear();
 	}
 
 	// no distance to show at first ...
@@ -2701,7 +2715,6 @@ int karte_t::lower_to(sint16 x, sint16 y, sint8 hsw, sint8 hse, sint8 hne, sint8
 	int n=0;
 	assert(is_within_limits(x,y));
 	grund_t *gr = lookup_kartenboden_nocheck(x,y);
-	const uint8 old_slope = gr->get_grund_hang();
 	sint8 water_hgt = get_water_hgt_nocheck(x,y);
 	const sint8 h0 = gr->get_hoehe();
 	// old height
@@ -2729,20 +2742,6 @@ int karte_t::lower_to(sint16 x, sint16 y, sint8 hsw, sint8 hse, sint8 hne, sint8
 	// calc new height and slope
 	const sint8 hneu = min( min( hn_sw, hn_se ), min( hn_ne, hn_nw ) );
 	const sint8 hmaxneu = max( max( hn_sw, hn_se ), max( hn_ne, hn_nw ) );
-
-	// only slope could have been shores
-	if(  old_slope  ) {
-		// if there are any shore corners, then the new tile must be all water since it is lowered
-		const bool make_water =
-			get_water_hgt_nocheck(x,y) <= lookup_hgt_nocheck(x,y)  ||
-			get_water_hgt_nocheck(x+1,y) <= lookup_hgt_nocheck(x+1,y)  ||
-			get_water_hgt_nocheck(x,y+1) <= lookup_hgt_nocheck(x,y+1)  ||
-			get_water_hgt_nocheck(x+1,y+1) <= lookup_hgt_nocheck(x+1,y+1);
-		if(  make_water  ) {
-			sint8 water_table = water_hgt >= hneu ? water_hgt : hneu;
-			set_water_hgt(x, y, water_table );
-		}
-	}
 
 	if(  hneu >= water_hgt  ) {
 		// calculate water table from surrounding tiles - start off with height on this tile
@@ -3832,7 +3831,7 @@ void karte_t::new_month()
 	update_history();
 
 	// advance history ...
-	last_month_bev = finance_history_month[ 0 ][ WORLD_CITICENS ];
+	last_month_bev = finance_history_month[ 0 ][ WORLD_CITIZENS ];
 	for( int hist = 0; hist < karte_t::MAX_WORLD_COST; hist++ ) {
 		for( int y = MAX_WORLD_HISTORY_MONTHS - 1; y > 0; y-- ) {
 			finance_history_month[ y ][ hist ] = finance_history_month[ y - 1 ][ hist ];
@@ -3944,7 +3943,7 @@ void karte_t::new_month()
 	if( !env_t::networkmode  &&  env_t::autosave>0  &&  last_month%env_t::autosave==0  &&  !win_get_magic(magic_welt_gui_t)  ) {
 		char buf[128];
 		sprintf( buf, "save/autosave%02i.sve", last_month+1 );
-		save( buf, loadsave_t::autosave_mode, env_t::savegame_version_str, true );
+		save( buf, true, env_t::savegame_version_str, true );
 	}
 }
 
@@ -4211,11 +4210,11 @@ void karte_t::step()
 	sint64 bev=0;
 	FOR(weighted_vector_tpl<stadt_t*>, const i, stadt) {
 		i->step(delta_t);
-		bev += i->get_finance_history_month(0, HIST_CITICENS);
+		bev += i->get_finance_history_month(0, HIST_CITIZENS);
 	}
 
 	// the inhabitants stuff
-	finance_history_month[0][WORLD_CITICENS] = bev;
+	finance_history_month[0][WORLD_CITIZENS] = bev;
 
 	DBG_DEBUG4("karte_t::step", "step factories");
 	FOR(slist_tpl<fabrik_t*>, const f, fab_list) {
@@ -4321,7 +4320,7 @@ void karte_t::restore_history(bool restore_transported_only)
 		sint64 total_mail = 1, trans_mail = 0;
 		sint64 total_goods = 1, supplied_goods = 0;
 		FOR(weighted_vector_tpl<stadt_t*>, const i, stadt) {
-			bev            += i->get_finance_history_month(m, HIST_CITICENS);
+			bev            += i->get_finance_history_month(m, HIST_CITIZENS);
 			trans_pas      += i->get_finance_history_month(m, HIST_PAS_TRANSPORTED);
 			total_pas      += i->get_finance_history_month(m, HIST_PAS_GENERATED);
 			trans_mail     += i->get_finance_history_month(m, HIST_MAIL_TRANSPORTED);
@@ -4335,7 +4334,7 @@ void karte_t::restore_history(bool restore_transported_only)
 			last_month_bev = bev;
 		}
 		finance_history_month[m][WORLD_GROWTH] = bev-last_month_bev;
-		finance_history_month[m][WORLD_CITICENS] = bev;
+		finance_history_month[m][WORLD_CITIZENS] = bev;
 		last_month_bev = bev;
 
 		// transportation ratio and total number
@@ -4354,7 +4353,7 @@ void karte_t::restore_history(bool restore_transported_only)
 		sint64 total_mail_year = 1, trans_mail_year = 0;
 		sint64 total_goods_year = 1, supplied_goods_year = 0;
 		FOR(weighted_vector_tpl<stadt_t*>, const i, stadt) {
-			bev                 += i->get_finance_history_year(y, HIST_CITICENS);
+			bev                 += i->get_finance_history_year(y, HIST_CITIZENS);
 			trans_pas_year      += i->get_finance_history_year(y, HIST_PAS_TRANSPORTED);
 			total_pas_year      += i->get_finance_history_year(y, HIST_PAS_GENERATED);
 			trans_mail_year     += i->get_finance_history_year(y, HIST_MAIL_TRANSPORTED);
@@ -4368,7 +4367,7 @@ void karte_t::restore_history(bool restore_transported_only)
 			bev_last_year = bev;
 		}
 		finance_history_year[y][WORLD_GROWTH] = bev-bev_last_year;
-		finance_history_year[y][WORLD_CITICENS] = bev;
+		finance_history_year[y][WORLD_CITIZENS] = bev;
 		bev_last_year = bev;
 
 		// transportation ratio and total number
@@ -4398,7 +4397,7 @@ void karte_t::update_history()
 	sint64 total_mail_year = 1, trans_mail_year = 0;
 	sint64 total_goods_year = 1, supplied_goods_year = 0;
 	FOR(weighted_vector_tpl<stadt_t*>, const i, stadt) {
-		bev                 += i->get_finance_history_month(0, HIST_CITICENS);
+		bev                 += i->get_finance_history_month(0, HIST_CITIZENS);
 		trans_pas           += i->get_finance_history_month(0, HIST_PAS_TRANSPORTED);
 		total_pas           += i->get_finance_history_month(0, HIST_PAS_GENERATED);
 		trans_mail          += i->get_finance_history_month(0, HIST_MAIL_TRANSPORTED);
@@ -4414,13 +4413,13 @@ void karte_t::update_history()
 	}
 
 	finance_history_month[0][WORLD_GROWTH] = bev-last_month_bev;
-	finance_history_year[0][WORLD_GROWTH] = bev - (finance_history_year[1][WORLD_CITICENS]==0 ? finance_history_month[0][WORLD_CITICENS] : finance_history_year[1][WORLD_CITICENS]);
+	finance_history_year[0][WORLD_GROWTH] = bev - (finance_history_year[1][WORLD_CITIZENS]==0 ? finance_history_month[0][WORLD_CITIZENS] : finance_history_year[1][WORLD_CITIZENS]);
 
 	// the inhabitants stuff
 	finance_history_year[0][WORLD_TOWNS] = finance_history_month[0][WORLD_TOWNS] = stadt.get_count();
-	finance_history_year[0][WORLD_CITICENS] = finance_history_month[0][WORLD_CITICENS] = bev;
+	finance_history_year[0][WORLD_CITIZENS] = finance_history_month[0][WORLD_CITIZENS] = bev;
 	finance_history_month[0][WORLD_GROWTH] = bev-last_month_bev;
-	finance_history_year[0][WORLD_GROWTH] = bev - (finance_history_year[1][WORLD_CITICENS]==0 ? finance_history_month[0][WORLD_CITICENS] : finance_history_year[1][WORLD_CITICENS]);
+	finance_history_year[0][WORLD_GROWTH] = bev - (finance_history_year[1][WORLD_CITIZENS]==0 ? finance_history_month[0][WORLD_CITIZENS] : finance_history_year[1][WORLD_CITIZENS]);
 
 	// transportation ratio and total number
 	finance_history_month[0][WORLD_PAS_RATIO] = (10000*trans_pas)/total_pas;
@@ -4702,7 +4701,10 @@ DBG_MESSAGE("karte_t::save()", "saving game to '%s'", filename);
 	savename[savename.length()-1] = '_';
 
 	display_show_load_pointer( true );
-	if(!file.wr_open( savename.c_str(), autosave ? loadsave_t::autosave_mode : loadsave_t::save_mode, autosave ? loadsave_t::autosave_level : loadsave_t::save_level, env_t::objfilename.c_str(), version_str )) {
+	const loadsave_t::mode_t mode = autosave ? loadsave_t::autosave_mode : loadsave_t::save_mode;
+	const int save_level = autosave ? loadsave_t::autosave_level : loadsave_t::save_level;
+
+	if(  file.wr_open( savename.c_str(), mode, save_level, env_t::objfilename.c_str(), version_str ) != loadsave_t::FILE_STATUS_OK  ) {
 		create_win(new news_img("Kann Spielstand\nnicht speichern.\n"), w_info, magic_none);
 		dbg->error("karte_t::save()","cannot open file for writing! check permissions!");
 	}
@@ -4780,9 +4782,15 @@ DBG_MESSAGE("karte_t::save(loadsave_t *file)", "start");
 			settings.set_player_type(i, player_t::EMPTY);
 		}
 	}
+
 	settings.rdwr(file);
+
 	for(  int i=0;  i<MAX_PLAYER_COUNT;  i++  ) {
 		settings.set_player_type(i, old_players[i]);
+	}
+
+	if (file->is_version_atleast(122, 1)) {
+		simrand_rdwr(file);
 	}
 
 	file->rdwr_long(ticks);
@@ -5121,7 +5129,7 @@ bool karte_t::load(const char *filename)
 		name.append(filename);
 	}
 
-	if(!file.rd_open(name)) {
+	if(file.rd_open(name) != loadsave_t::FILE_STATUS_OK) {
 
 		if(  file.get_version_int()==0  ||  file.get_version_int()>loadsave_t::int_version(SAVEGAME_VER_NR, NULL )  ) {
 			dbg->warning("karte_t::load()", translator::translate("WRONGSAVE") );
@@ -5159,7 +5167,7 @@ DBG_MESSAGE("karte_t::load()","Savegame version is %u", file.get_version_int());
 				char fn[256];
 				sprintf( fn, "server%d-pwdhash.sve", env_t::server );
 				loadsave_t pwdfile;
-				if(  pwdfile.rd_open(fn)  ) {
+				if(  pwdfile.rd_open(fn) == loadsave_t::FILE_STATUS_OK  ) {
 					rdwr_player_password_hashes( &pwdfile );
 					// correct locking info
 					nwc_auth_player_t::init_player_lock_server(this);
@@ -5256,6 +5264,7 @@ DBG_MESSAGE("karte_t::load()","Savegame version is %u", file.get_version_int());
 
 		tool_t::update_toolbars();
 		toolbar_last_used_t::last_used_tools->clear();
+
 		set_tool( tool_t::general_tool[TOOL_QUERY], get_active_player() );
 	}
 	settings.set_filename(filename);
@@ -5352,14 +5361,24 @@ void karte_t::load(loadsave_t *file)
 	dbg->warning("karte_t::load", "Fileversion: %u", file->get_version_int());
 	settings = env_t::default_settings;
 	settings.rdwr(file);
+
 	loaded_rotation = settings.get_rotation();
 
 	// some functions (finish_rd) need to know what version was loaded
 	load_version = file->get_version_int();
 
+	if (file->is_version_atleast(122, 1)) {
+		// rdwr the entire RNG sate
+		simrand_rdwr(file);
+	}
+
 	if(  env_t::networkmode  ) {
-		// to have games synchronized, transfer random counter too
-		setsimrand(settings.get_random_counter(), 0xFFFFFFFFu );
+		// To have games synchronized, transfer random counter too
+		// Superseded by simrand_rdwr in newer versions
+		if (file->is_version_less(122, 1)) {
+			setsimrand(settings.get_random_counter(), 0xFFFFFFFFu );
+		}
+
 		translator::init_custom_names(settings.get_name_language_id());
 	}
 
@@ -5835,7 +5854,7 @@ DBG_MESSAGE("karte_t::load()", "%d factories loaded", fab_list.get_count());
 				file->rdwr_longlong(finance_history_month[month][cost_type]);
 			}
 		}
-		last_month_bev = finance_history_month[1][WORLD_CITICENS];
+		last_month_bev = finance_history_month[1][WORLD_CITIZENS];
 
 		if (file->is_version_atleast(112, 5) &&  file->is_version_less(120, 6)) {
 			restore_history(true);
@@ -6048,26 +6067,60 @@ void karte_t::calc_humidity_map_region( sint16 , sint16 , sint16 xbottom, sint16
 
 	const sint8 height_increase = min( 160 / settings.get_climate_borders(arctic_climate,1), 33 );
 
-	for(  sint16 y = 0;  y < ybottom;  y++  ) {
-		sint8 current_humidity = 50;	// start value for each row
-		for(  sint16 x = 0;  x < xbottom;  x++  ) {
+	const ribi_t::ribi wind = settings.get_wind_dir();
+	if( wind == ribi_t::west || wind == ribi_t::east ) {
+		const sint16 x0   = wind == ribi_t::west ? 0 : xbottom - 1;
+		const sint16 xmax = wind == ribi_t::west ? xbottom : -1;
+		const sint16 dx   = wind == ribi_t::west ? 1 : -1;
+		for(  sint16 y = 0;  y < ybottom;  y++  ) {
+			sint8 current_humidity = 50;	// start value for each row
+			for(  sint16 x = x0;  x < xmax;  x+=dx  ) {
 
-			grund_t *gr = lookup_kartenboden(x,y);
-			if(  gr->is_water()  ||   gr->hat_weg(water_wt)  ) {
-				// increase humidity over water and rivers
-				current_humidity = current_humidity+settings.get_moisture_water();
-				if( gr->is_water() ) {
-					climate_map.at( x, y ) = water_climate;
+				grund_t *gr = lookup_kartenboden(x,y);
+				if(  gr->is_water()  ||   gr->hat_weg(water_wt)  ) {
+					// increase humidity over water and rivers
+					current_humidity = current_humidity+settings.get_moisture_water();
+					if( gr->is_water() ) {
+						climate_map.at( x, y ) = water_climate;
+					}
 				}
-			}
-			else {
-				sint8 gradient = lookup_hgt_nocheck( x+1, y )-lookup_hgt_nocheck( x, y );
-				current_humidity += settings.get_moisture() + gradient * height_increase;
-			}
-			current_humidity = clamp<sint8>( current_humidity, 0, 100 );
-			humidity_map.at(x,y) = current_humidity;
+				else {
+					sint8 gradient = lookup_hgt_nocheck( x+1, y )-lookup_hgt_nocheck( x, y );
+					current_humidity += settings.get_moisture() + gradient * height_increase;
+				}
+				current_humidity = clamp<sint8>( current_humidity, 0, 100 );
+				humidity_map.at(x,y) = current_humidity;
 
+			}
 		}
+	}
+	else {
+		const sint16 y0   = wind == ribi_t::north ? 0 : ybottom - 1;
+		const sint16 ymax = wind == ribi_t::north ? ybottom : -1;
+		const sint16 dy   = wind == ribi_t::north ? 1 : -1;
+
+		for(  sint16 x = 0;  x < xbottom;  x++  ) {
+			sint8 current_humidity = 50;	// start value for each row
+			for(  sint16 y = y0;  y < ymax;  y+=dy  ) {
+
+				grund_t *gr = lookup_kartenboden(x,y);
+				if(  gr->is_water()  ||   gr->hat_weg(water_wt)  ) {
+					// increase humidity over water and rivers
+					current_humidity = current_humidity+settings.get_moisture_water();
+					if( gr->is_water() ) {
+						climate_map.at( x, y ) = water_climate;
+					}
+				}
+				else {
+					sint8 gradient = lookup_hgt_nocheck( x+1, y )-lookup_hgt_nocheck( x, y );
+					current_humidity += settings.get_moisture() + gradient * height_increase;
+				}
+				current_humidity = clamp<sint8>( current_humidity, 0, 100 );
+				humidity_map.at(x,y) = current_humidity;
+
+			}
+		}
+
 	}
 }
 
@@ -6098,8 +6151,8 @@ void karte_t::calc_climate_map_region( sint16 xtop, sint16 ytop, sint16 xbottom,
 
 			// first remove water all clear single tiles from effort
 			// for the first passes, we only work on the grid, which is much faster
-			for(  sint16 y = ytop;  y < ybottom;  y++  ) {
-				for(  sint16 x = xtop;  x < xbottom;  x++  ) {
+			for(  sint16 y = 0;  y < ybottom;  y++  ) {
+				for(  sint16 x = 0;  x < xbottom;  x++  ) {
 					if(  climate_map.at(x,y)==0x7F ) {
 						climate this_climate = arctic_climate; // fallthrough option
 
@@ -6146,50 +6199,58 @@ void karte_t::calc_climate_map_region( sint16 xtop, sint16 ytop, sint16 xbottom,
 							this_climate = rocky_climate;
 						}
 
-						climate_map.at( x, y ) = this_climate;
+						if( x >= xtop  &&  y >= ytop ) {
+							climate_map.at( x, y ) = this_climate;
+						}
 					}
 				}
 			}
 
 			// smooth climates (this code needs a little cleanup, I think)
-			const sint32 world_size = (get_size().x)*(sint32)(get_size().y);
+			const sint32 world_size = xbottom*(sint32)ybottom;
 			climate *climate_smooth = new climate[world_size];
 			climate *climate_smooth_cpy = new climate[world_size];
 
-			for(uint16 y=0; y<get_size().y; y++) {
-				for(uint16 x=0; x<get_size().x; x++) {
-					climate_smooth[x+y*(get_size().x)] = (climate)climate_map.at( x, y );
+			for(uint16 y=0; y<ybottom; y++) {
+				for(uint16 x=0; x<xbottom; x++) {
+					climate_smooth[x+y*xbottom] = (climate)climate_map.at( x, y );
 				}
 			}
 
 			for(int s=0; s<2; s++) {
 				memcpy( climate_smooth_cpy, climate_smooth, world_size*sizeof(climate) );
 
-				for(uint16 y=0; y<get_size().y; y++) {
-					for(uint16 x=0; x<get_size().x; x++) {
-						if(climate_smooth_cpy[x+y*(get_size().x)] != water_climate ) {
-							sint32 temp_climate = 4 * (climate_smooth_cpy[x+y*(get_size().x)]);
+				for(uint16 y=ytop; y<ybottom; y++) {
+					for(uint16 x=max(0,xtop-1); x<xbottom; x++) {
+						if(climate_smooth_cpy[x+y*xbottom] != water_climate ) {
+							sint32 temp_climate = 4 * (climate_smooth_cpy[x+y*xbottom]);
 							for(int i=0; i<8; i++) {
 								sint32 this_climate;
 								koord k_neighbour = koord(x,y) + koord::neighbours[i];
-								if(  is_within_limits(k_neighbour.x, k_neighbour.y)  &&  climate_smooth_cpy[k_neighbour.x+k_neighbour.y*(get_size().x)]!=water_climate  ) {
-									this_climate = climate_smooth_cpy[k_neighbour.x+k_neighbour.y*(get_size().x)];
+
+								// note: cannot use is_within_limits() here since expanding the map
+								// in both directions at the same time results in a buffer overrun
+								// since the region does not necessarily cover the whole map
+								const bool within_limits = (k_neighbour.x|k_neighbour.y|(xbottom-1 - k_neighbour.x)|(ybottom-1 - k_neighbour.y)) >= 0;
+
+								if(  within_limits  &&  climate_smooth_cpy[k_neighbour.x+k_neighbour.y*xbottom]!=water_climate  ) {
+									this_climate = climate_smooth_cpy[k_neighbour.x+k_neighbour.y*xbottom];
 								}
 								else {
-									this_climate = climate_smooth_cpy[x+y*(get_size().x)];
+									this_climate = climate_smooth_cpy[x+y*xbottom];
 								}
 								temp_climate += (i&1) ? (2 * (this_climate)) : (this_climate);
 							}
 							//if(s<8) temp_height += sets->get_map_roughness()*(simrand(8));
-							climate_smooth[x+y*(get_size().x)]=(climate)((temp_climate)/16);
+							climate_smooth[x+y*xbottom]=(climate)((temp_climate)/16);
 						}
 					}
 				}
 			}
 
-			for(uint16 y=0; y<get_size().y; y++) {
-				for(uint16 x=0; x<get_size().x; x++) {
-					climate_map.at( x, y ) = climate_smooth[x+y*(get_size().x)];
+			for(uint16 y=ytop; y<ybottom; y++) {
+				for(uint16 x=max(0,xtop-1); x<xbottom; x++) {
+					climate_map.at( x, y ) = climate_smooth[x+y*xbottom];
 				}
 			}
 
@@ -6266,6 +6327,27 @@ void karte_t::calc_climate_map_region( sint16 xtop, sint16 ytop, sint16 xbottom,
 			}
 		}
 		break;
+
+		case settings_t::MAP_BASED:
+		{
+			/* Essentially keep the climates from this map
+			 * we just have to set the tiles with water to water climate
+			 * and vice vers
+			 */
+			for(  sint16 y = ytop;  y < ybottom;  y++  ) {
+				for(  sint16 x = xtop;  x < xbottom;  x++  ) {
+					sint8 hgt = lookup_hgt_nocheck( x, y );
+					if( hgt < groundwater ) {
+						climate_map.at( x, y ) = water_climate;
+					}
+					else if( climate_map.at( x, y )==water_climate ) {
+						climate_map.at( x, y ) = height_to_climate[hgt-groundwater];
+					}
+				}
+			}
+		}
+		break;
+
 	}
 
 	assign_climate_map_region( xtop, ytop, xbottom, ybottom );
@@ -6485,13 +6567,17 @@ uint8 karte_t::sp2num(player_t *player)
 void karte_t::load_heightfield(settings_t* const sets)
 {
 	sint16 w, h;
-	sint8 *h_field;
-	height_map_loader_t hml(sets);
+	sint8 *h_field = NULL;
+	const sint8 min_h = sets->get_minimumheight();
+	const sint8 max_h = sets->get_maximumheight();
+
+	height_map_loader_t hml(min_h, max_h, env_t::height_conv_mode);
+
 	if(hml.get_height_data_from_file(sets->heightfield.c_str(), (sint8)(sets->get_groundwater()), h_field, w, h, false )) {
 		sets->set_size(w,h);
 		// create map
 		init(sets,h_field);
-		delete [] h_field;
+		free(h_field);
 	}
 	else {
 		dbg->error("karte_t::load_heightfield()","Cant open file '%s'", sets->heightfield.c_str());
@@ -6831,7 +6917,7 @@ void karte_t::network_game_set_pause(bool pause_, uint32 syncsteps_)
 const char* karte_t::call_work(tool_t *tool, player_t *player, koord3d pos, bool &suspended)
 {
 	const char *err = NULL;
-	if (!env_t::networkmode  ||  tool->is_work_network_safe()  ||  tool->is_work_here_network_save( player, pos) ) {
+	if (!env_t::networkmode  ||  tool->is_work_network_safe()  ||  tool->is_work_here_network_safe( player, pos) ) {
 		// do the work
 		tool->flags |= tool_t::WFL_LOCAL;
 		// check allowance by scenario

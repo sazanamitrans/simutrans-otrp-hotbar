@@ -3,114 +3,478 @@
  * (see LICENSE.txt)
  */
 
+#include "simwin.h"
+#include "minimap.h"
+
+#include "components/gui_convoiinfo.h"
+
 #include "../dataobj/schedule.h"
 #include "../dataobj/loadsave.h"
-#include "minimap.h"
-#include "../simline.h"
-#include "simwin.h"
-#include "../simtool.h"
-#include "../utils/cbuffer_t.h"
+#include "../dataobj/translator.h"
 
+#include "../vehicle/vehicle.h"
+
+#include "../convoihandle_t.h"
+#include "../simconvoi.h"
+#include "../simdepot.h"
+#include "../simhalt.h"
+#include "../simline.h"
+#include "../simtool.h"
+
+#include "../utils/cbuffer_t.h"
+#include "../utils/simstring.h"
+
+#include "halt_list_stats.h"
 #include "line_management_gui.h"
 
-line_management_gui_t::line_management_gui_t(linehandle_t line, player_t* player_) :
-	schedule_gui_t()
+#define CHART_HEIGHT (100)
+
+static const char *cost_type[MAX_LINE_COST] =
 {
+	"Free Capacity",
+	"Transported",
+	"Revenue",
+	"Operation",
+	"Road toll",
+	"Profit",
+	"Convoys",
+	"Distance",
+	"Maxspeed"
+};
+
+static const uint8 cost_type_color[MAX_LINE_COST] =
+{
+	COL_FREE_CAPACITY,
+	COL_TRANSPORTED,
+	COL_REVENUE,
+	COL_OPERATION,
+	COL_TOLL,
+	COL_PROFIT,
+	COL_CONVOI_COUNT,
+	COL_DISTANCE,
+	COL_MAXSPEED
+};
+
+static uint8 idx2cost[MAX_LINE_COST] =
+{
+	LINE_CAPACITY,
+	LINE_TRANSPORTED_GOODS,
+	LINE_REVENUE,
+	LINE_OPERATIONS,
+	LINE_WAYTOLL,
+	LINE_PROFIT,
+	LINE_CONVOIS,
+	LINE_DISTANCE,
+	LINE_MAXSPEED,
+};
+
+static const bool cost_type_money[ MAX_LINE_COST ] =
+{
+	false,
+	false,
+	true,
+	true,
+	true,
+	true,
+	false,
+	false,
+	false
+};
+
+
+line_management_gui_t::line_management_gui_t( linehandle_t line_, player_t* player_ ) :
+	gui_frame_t( translator::translate( "Fahrplan" ), player_ ),
+	scrolly_convois( gui_scrolled_list_t::windowskin ),
+	scrolly_halts( gui_scrolled_list_t::windowskin )
+{
+	set_table_layout( 3, 0 );
+	line = line_;
+	player = player_;
+
+	// line name
+	inp_name.add_listener( this );
+	add_component( &inp_name, 3 );
+
+	lb_convoi_count.set_text( "no convois" );
+	add_component( &lb_convoi_count, 3 );
+
+	capacity_bar.add_color_value( &load, color_idx_to_rgb( COL_GREEN ) );
+	add_component( &capacity_bar, 2 );
+	new_component<gui_fill_t>();
+
+	add_component( &lb_profit_value, 3 );
+
+	// tab panel: connections, chart panels, details
+	add_component( &switch_mode, 3 );
+	switch_mode.add_listener( this );
+
+	switch_mode.add_tab( &container_schedule, translator::translate( "Fahrplan" ) );
+	container_schedule.set_table_layout( 1, 0 );
+	container_schedule.add_component( &scd );
+
+	scd.add_listener( this );
+
+	switch_mode.add_tab( &container_stats, translator::translate( "Chart" ) );
+
+	container_stats.set_table_layout( 1, 0 );
+
+	chart.set_dimension( 12, 10000 );
+	chart.set_background( SYSCOL_CHART_BACKGROUND );
+	chart.set_min_size( scr_size( 0, CHART_HEIGHT ) );
+	container_stats.add_component( &chart );
+
+	if(line.is_bound() ) {
+		container_stats.add_table( 4, 3 )->set_force_equal_columns( true );
+		for(  int cost = 0;  cost < MAX_LINE_COST;  cost++  ) {
+			uint16 curve = chart.add_curve( color_idx_to_rgb( cost_type_color[ cost ] ), line->get_finance_history(), MAX_LINE_COST, cost, MAX_MONTHS, cost_type_money[ cost ], false, true, cost_type_money[ cost ] * 2 );
+
+			button_t *b = container_stats.new_component<button_t>();
+			b->init( button_t::box_state_automatic | button_t::flexible, cost_type[ cost ] );
+			b->background_color = color_idx_to_rgb( cost_type_color[ cost ] );
+			b->pressed = false;
+
+			button_to_chart.append( b, &chart, curve );
+		}
+		container_stats.end_table();
+	}
+
+	switch_mode.add_tab( &container_convois, translator::translate( "cl_title" ) );
+
+	container_convois.set_table_layout( 1, 0 );
+	container_convois.add_table( 4, 1 )->set_force_equal_columns( true );
+
+	bt_delete_line.init( button_t::roundbox | button_t::flexible, "Delete Line" );
+	bt_delete_line.set_tooltip( "Delete the selected line (if without associated convois)." );
+	bt_delete_line.add_listener( this );
+	bt_delete_line.disable();
+	container_convois.add_component( &bt_delete_line );
+
+	bt_withdraw_line.init( button_t::roundbox_state | button_t::flexible, "Withdraw All" );
+	bt_withdraw_line.set_tooltip( "Convoi is sold when all wagons are empty." );
+	bt_withdraw_line.add_listener( this );
+	container_convois.add_component( &bt_withdraw_line );
+
+	bt_find_convois.init( button_t::roundbox | button_t::flexible, "Find matching convois" );
+	bt_find_convois.set_tooltip( "Add convois with similar schedule to this line." );
+	bt_find_convois.add_listener( this );
+	container_convois.add_component( &bt_find_convois );
+
+	new_component<gui_fill_t>();
+	container_convois.end_table();
+
+	container_convois.add_component(&scrolly_convois);
+
+	switch_mode.add_tab(&container_halts, translator::translate("hl_title"));
+	container_halts.set_table_layout(1,0);
+
+	scrolly_halts.set_maximize( true );
+	container_halts.add_component(&scrolly_halts);
+
 	if (line.is_bound() ) {
-		schedule_gui_t::init(line->get_schedule()->copy(), player_, convoihandle_t() );
-
-		this->line = line;
-		// has this line a single running convoi?
-		if(  line->count_convoys() > 0  ) {
-			minimap_t::get_instance()->set_selected_cnv( line->get_convoy(0) );
-		}
+		// title
+		set_name(line->get_name() );
+		win_set_magic(this, (ptrdiff_t)line.get_rep());
+		// schedule
+		scd.init( line->get_schedule(), player, convoihandle_t(), linehandle_t() );
+		// we use local buffer to prevent sudden death on line deletion
+		tstrncpy(old_line_name, line->get_name(), sizeof(old_line_name));
+		tstrncpy(line_name, line->get_name(), sizeof(line_name));
+		inp_name.set_text(line_name, sizeof(line_name));
+		// init_chart
+		init_chart();
+		bt_delete_line.enable();
 	}
+	old_convoi_count = old_halt_count = 0;
+
+	set_resizemode(diagonal_resize);
+	reset_min_windowsize();
+	set_windowsize(get_windowsize());
 }
 
 
-line_management_gui_t::~line_management_gui_t()
+void line_management_gui_t::init_chart()
 {
-	delete old_schedule; // since we pass a *copy* of the line's schedule to the base class
-	old_schedule = NULL;
-}
+	if( line.is_bound() ) {
+		if( chart.get_curve_count() == 0 ) {
+			container_stats.add_table( 4, 3 )->set_force_equal_columns( true );
+			for( int cost = 0; cost < MAX_LINE_COST; cost++ ) {
+				uint16 curve = chart.add_curve( color_idx_to_rgb( cost_type_color[ cost ] ), line->get_finance_history(), MAX_LINE_COST, idx2cost[cost], MAX_MONTHS, cost_type_money[ cost ], false, true, cost_type_money[ cost ] * 2 );
 
+				button_t *b = container_stats.new_component<button_t>();
+				b->init( button_t::box_state_automatic | button_t::flexible, cost_type[ cost ] );
+				b->background_color = color_idx_to_rgb( cost_type_color[ cost ] );
+				b->pressed = false;
 
-bool line_management_gui_t::infowin_event(const event_t *ev)
-{
-	if(  player!=NULL  ) {
-		// not "magic_line_schedule_rdwr_dummy" during loading of UI ...
-		if(  !line.is_bound()  ) {
-			destroy_win( this );
-		}
-		else  {
-
-			bool swallowed = schedule_gui_t::infowin_event(ev);
-
-			if(  ev->ev_class == INFOWIN  &&  ev->ev_code == WIN_CLOSE  ) {
-				// update line schedule via tool!
-				tool_t *tool = create_tool( TOOL_CHANGE_LINE | SIMPLE_TOOL );
-				cbuffer_t buf;
-				buf.printf( "g,%i,", line.get_id() );
-				schedule->sprintf_schedule( buf );
-				tool->set_default_param(buf);
-				welt->set_tool( tool, line->get_owner() );
-				// since init always returns false, it is safe to delete immediately
-				delete tool;
-				return true;
+				button_to_chart.append( b, &chart, curve );
 			}
-			return swallowed;
+			container_stats.end_table();
+			old_convoi_count = -1; // recalc!
 		}
 	}
-	return false;
 }
+
+
+void line_management_gui_t::draw(scr_coord pos, scr_size size)
+{
+	if(  line.is_bound()  ) {
+
+		bool is_change_allowed = player == welt->get_active_player()  &&  !welt->get_active_player()->is_locked();
+
+		bool has_changed = false; // then we need to recalc sizes ...
+
+		if(  line->count_convoys() != old_convoi_count  ) {
+
+			old_convoi_count = line->count_convoys();
+
+			// update convoi info
+			switch( old_convoi_count ) {
+				case 0: lb_convoi_count.set_text( "no convois" );
+					break;
+				case 1: lb_convoi_count.set_text( "1 convoi" );
+					break;
+				default:
+					lb_convoi_count_text.clear();
+					lb_convoi_count_text.printf( translator::translate( "%d convois" ), old_convoi_count );
+					lb_convoi_count.set_text( lb_convoi_count_text );
+					break;
+			}
+
+			bt_withdraw_line.enable( old_convoi_count != 0 );
+			// fill convoi container
+			scrolly_convois.clear_elements();
+			capacity = 0;
+			for( uint32 i = 0; i < line->count_convoys(); i++ ) {
+				convoihandle_t cnv = line->get_convoy( i );
+				if( i == 0 ) {
+					// just to mark the schedule on the minimap
+					minimap_t::get_instance()->set_selected_cnv( cnv );
+				}
+				scrolly_convois.new_component<gui_convoiinfo_t>( cnv );
+				for (unsigned i = 0; i<cnv->get_vehicle_count(); i++) {
+					capacity += cnv->get_vehikel( i )->get_cargo_max();
+				}
+			}
+			has_changed = true;
+
+			if( old_convoi_count>0 ) {
+				scrolly_convois.set_maximize( true );
+			}
+		}
+
+		load = capacity - line->get_finance_history( 0, LINE_CAPACITY );
+		capacity_bar.set_base( capacity );
+
+		char profit_str[64];
+		money_to_string( profit_str, line->get_finance_history( 0, LINE_PROFIT )/100.0, true );
+		lb_profit_value_text.clear();
+		lb_profit_value_text.printf( "%s %s", translator::translate("Gewinn"), profit_str );
+		lb_profit_value.set_text_pointer( lb_profit_value_text );
+		lb_profit_value.set_color( line->get_finance_history( 0, LINE_PROFIT ) >= 0 ? MONEY_PLUS : MONEY_MINUS );
+
+		if(  line->get_schedule()->get_count() != old_halt_count  ) {
+			// update halt info
+			old_halt_count = line->get_schedule()->get_count();
+			// fill haltestellen container with info of stops of the line
+			scrolly_halts.clear_elements();
+			FOR(minivec_tpl<schedule_entry_t>, const& i, line->get_schedule()->entries) {
+				halthandle_t const halt = haltestelle_t::get_halt(i.pos, player);
+				if(  halt.is_bound()  ) {
+					scrolly_halts.new_component<halt_list_stats_t>(halt);
+				}
+			}
+			has_changed = true;
+		}
+
+		if( has_changed ) {
+			reset_min_windowsize();
+		}
+
+		bt_withdraw_line.enable( is_change_allowed );
+
+		if( strcmp( get_name(), line->get_name() ) ) {
+			set_name( line->get_name() );
+			welt->set_dirty();
+		}
+	}
+	else {
+		destroy_win( this );
+	}
+	gui_frame_t::draw(pos,size);
+}
+
 
 
 void line_management_gui_t::rdwr(loadsave_t *file)
 {
-	scr_size size = get_windowsize();
-	size.rdwr( file );
-	simline_t::rdwr_linehandle_t(file, line);
-	// player that edits
+	sint32 cont_xoff, cont_yoff;
+	sint32 halt_xoff, halt_yoff;
 	uint8 player_nr;
-	if (file->is_saving()) {
+	if( file->is_saving() ) {
+		cont_xoff = scrolly_convois.get_scroll_x();
+		cont_yoff = scrolly_convois.get_scroll_y();
+		halt_xoff = scrolly_halts.get_scroll_x();
+		halt_yoff = scrolly_halts.get_scroll_y();
 		player_nr = player->get_player_nr();
 	}
+
+	scr_size size = get_windowsize();
+	size.rdwr( file );
+	file->rdwr_long( cont_xoff );
+	file->rdwr_long( cont_yoff );
+	file->rdwr_long( halt_xoff );
+	file->rdwr_long( halt_yoff );
 	file->rdwr_byte( player_nr );
-	player = welt->get_player(player_nr);
+	file->rdwr_str( old_line_name, lengthof( old_line_name ) );
+	file->rdwr_str( line_name, lengthof( line_name ) );
 
-	// save edited schedule
-	if(  file->is_loading()  ) {
-		// dummy types
-		old_schedule = new truck_schedule_t();
-		schedule = new truck_schedule_t();
-	}
-	schedule->rdwr(file);
-	old_schedule->rdwr(file);
+	simline_t::rdwr_linehandle_t(file, line);
+	scd.rdwr( file );
 
 	if(  file->is_loading()  ) {
-		assert(player); // since it was alive during saving, this should never happen
-
-		if(  line.is_bound()  &&  old_schedule->matches( welt, line->get_schedule() )  ) {
-
-			delete old_schedule;
-			old_schedule = NULL;
-
-			schedule_t *save_schedule = schedule->copy();
-
-			init(line->get_schedule()->copy(), line->get_owner(), convoihandle_t() );
-			// init replaced schedule, restore
-			schedule->copy_from(save_schedule);
-			delete save_schedule;
-
+		player = welt->get_player( player_nr );
+		if(  line.is_bound()  ) {
 			set_windowsize(size);
-
+			set_windowsize( size );
+			// title
+			set_name(line->get_name() );
 			win_set_magic(this, (ptrdiff_t)line.get_rep());
+			// schedule
+			scrolly_convois.set_scroll_position( cont_xoff, cont_yoff );
+			scrolly_halts.set_scroll_position( halt_xoff, halt_yoff );
+
+			inp_name.set_text(line_name, sizeof(line_name));
+
+			init_chart();
 		}
 		else {
 			line = linehandle_t();
-			player = NULL; // prevent destructor from updating
 			destroy_win( this );
 			dbg->error( "line_management_gui_t::rdwr", "Could not restore schedule window for line id %i", line.get_id() );
 		}
 	}
+
+	switch_mode.rdwr( file );
+	button_to_chart.rdwr( file );
+}
+
+
+void line_management_gui_t::apply_schedule()
+{
+	if( scd.has_pending_changes() && line.is_bound() && (player == welt->get_active_player() || welt->get_active_player()->is_public_service()) ) {
+		// update line schedule via tool!
+		tool_t *tool = create_tool( TOOL_CHANGE_LINE | SIMPLE_TOOL );
+		cbuffer_t buf;
+		buf.printf( "g,%i,", line.get_id() );
+		scd.get_schedule()->sprintf_schedule( buf );
+		tool->set_default_param( buf );
+		world()->set_tool( tool, line->get_owner() );
+		// since init always returns false, it is safe to delete immediately
+		delete tool;
+	}
+}
+
+
+bool line_management_gui_t::action_triggered( gui_action_creator_t *comp, value_t v )
+{
+	if( comp == &scd ) {
+		if( !v.p ) {
+			// revert
+			scd.init( line->get_schedule(), player, convoihandle_t(), line );
+			reset_min_windowsize();
+		}
+		return true;
+	}
+	else if( comp == &switch_mode ) {
+		bool edit_schedule = switch_mode.get_aktives_tab() == &container_schedule;
+
+		scd.highlight_schedule( edit_schedule );
+		if(  !edit_schedule  ) {
+			apply_schedule();
+		}
+	}
+	else if(  comp == &inp_name  ) {
+		rename_line();
+	}
+	else if(  comp == &bt_delete_line  ) {
+		if(  line.is_bound()  ) {
+			tool_t *tmp_tool = create_tool( TOOL_CHANGE_LINE | SIMPLE_TOOL );
+			cbuffer_t buf;
+			buf.printf( "d,%i", line.get_id() );
+			tmp_tool->set_default_param(buf);
+			welt->set_tool( tmp_tool, player );
+			// since init always returns false, it is safe to delete immediately
+			delete tmp_tool;
+			depot_t::update_all_win();
+		}
+	}
+	else if(  comp == &bt_withdraw_line  ) {
+		bt_withdraw_line.pressed ^= 1;
+		if (  line.is_bound()  ) {
+			tool_t *tmp_tool = create_tool( TOOL_CHANGE_LINE | SIMPLE_TOOL );
+			cbuffer_t buf;
+			buf.printf( "w,%i,%i", line.get_id(), bt_withdraw_line.pressed );
+			tmp_tool->set_default_param(buf);
+			welt->set_tool( tmp_tool, player );
+			// since init always returns false, it is safe to delete immediately
+			delete tmp_tool;
+		}
+	}
+	else if(  comp == &bt_find_convois  ) {
+		FOR(vector_tpl<convoihandle_t>, cnv, welt->convoys()) {
+			if(  cnv->get_owner()==player  ) {
+				if(  !cnv->get_line().is_bound()  ) {
+					if(  cnv->get_schedule()->matches( welt, line->get_schedule() )  ) {
+						// same schedule, and no line =< add to line
+						char id[16];
+						sprintf(id, "%i,%i", line.get_id(), cnv->get_schedule()->get_current_stop());
+						cnv->call_convoi_tool('l', id);
+					}
+				}
+			}
+		}
+	}
+
+
+	return false;
+}
+
+
+void line_management_gui_t::rename_line()
+{
+	if(  line.is_bound()  ) {
+		const char *t = inp_name.get_text();
+		// only change if old name and current name are the same
+		// otherwise some unintended undo if renaming would occur
+		if(  t  &&  t[0]  &&  strcmp(t, line->get_name())  &&  strcmp(old_line_name, line->get_name())==0  ) {
+			// text changed => call tool
+			cbuffer_t buf;
+			buf.printf( "l%u,%s", line.get_id(), t );
+			tool_t *tmp_tool = create_tool( TOOL_RENAME | SIMPLE_TOOL );
+			tmp_tool->set_default_param( buf );
+			welt->set_tool( tmp_tool, line->get_owner() );
+			// since init always returns false, it is safe to delete immediately
+			delete tmp_tool;
+			// do not trigger this command again
+			tstrncpy(old_line_name, t, sizeof(old_line_name));
+		}
+	}
+}
+
+
+bool line_management_gui_t::infowin_event( const event_t *ev )
+{
+	if(  ev->ev_class == INFOWIN  &&  ev->ev_code == WIN_CLOSE  ) {
+		if(  scd.has_pending_changes()  ) {
+			apply_schedule();
+		}
+		scd.highlight_schedule( false );
+	}
+
+	if(  ev->ev_class == INFOWIN  &&  ev->ev_code == WIN_TOP  ) {
+		if(  switch_mode.get_aktives_tab() == &container_schedule  ) {
+			scd.highlight_schedule( true );
+		}
+	}
+
+	return gui_frame_t::infowin_event( ev );
 }

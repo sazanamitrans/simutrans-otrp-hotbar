@@ -70,7 +70,7 @@ public:
 	bool init(player_t*) OVERRIDE { return false; }
 	bool is_init_network_safe() const OVERRIDE { return true; }
 	bool is_work_network_safe() const OVERRIDE { return true; }
-	bool is_move_network_save(player_t*) const OVERRIDE { return true; }
+	bool is_move_network_safe(player_t*) const OVERRIDE { return true; }
 };
 tool_t *tool_t::dummy = new tool_dummy_t();
 
@@ -172,6 +172,8 @@ tool_t *create_simple_tool(int toolnr)
 		case TOOL_TOGGLE_RESERVATION:   tool = new tool_toggle_reservation_t();   break;
 		case TOOL_VIEW_OWNER:           tool = new tool_view_owner_t();           break;
 		case TOOL_HIDE_UNDER_CURSOR:    tool = new tool_hide_under_cursor_t();    break;
+		case TOOL_MOVE_MAP:             tool = new tool_move_map_t();             break;
+		case TOOL_ROLLUP_ALL_WIN:       tool = new tool_rollup_all_win_t();       break;
 		case UNUSED_WKZ_PWDHASH_TOOL:
 			dbg->warning("create_simple_tool()","deprecated tool [%i] requested", toolnr);
 			return NULL;
@@ -341,12 +343,39 @@ bool check_tool_availability(const tool_t *tool, uint64 time)
 }
 
 
-static utf32 str_to_key( const char *str )
+static utf32 str_to_key( const char *str, uint8 *modifier )
 {
+	*modifier = 0;	// default no modufier check
 	if(  str[1]==','  ||  str[1]<=' ') {
 		return (uint8)*str;
 	}
 	else {
+		// check for control char
+		if(str[0]=='^') {
+			if( str[1]==0  ||  str[1]=='^'  ) {
+				return str[1];
+			}
+			else {
+				*modifier = 2;
+				// only single character following =>make is 1..26 value
+				if(  isalpha( str[1] )  ) {
+					return tolower(str[1]) - 'a' + 1;
+				}
+				str++;
+			}
+		}
+		// add shift as requested modifier?
+		if(str[0]=='+') {
+			if(  str[ 1 ] == '+' ||  str[1]==0  ) {
+				return '+';
+			}
+			*modifier = 1;
+			str++;
+		}
+		// direct value (decimal)
+		if(str[0]=='#') {
+			return (str[1]=='#') ? str[1] : atoi(str+1);
+		}
 		// check for utf8
 		if(  127<(uint8)*str  ) {
 			size_t len = 0;
@@ -354,14 +383,6 @@ static utf32 str_to_key( const char *str )
 			if(str[len]==',') {
 				return c;
 			}
-		}
-		// control char
-		if(str[0]=='^') {
-			return (str[1]&(~32))-64;
-		}
-		// direct value (decimal)
-		if(str[0]=='#') {
-			return atoi(str+1);
 		}
 		// Function key?
 		if(str[0]=='F') {
@@ -374,6 +395,14 @@ static utf32 str_to_key( const char *str )
 		if (strstart(str, "COMMA")) {
 			return ',';
 		}
+		// Scroll lock
+		if (strstart(str, "SCROLLLOCK")) {
+			return SIM_KEY_SCROLLLOCK;
+		}
+		// break/pause key
+		if (strstart(str, "PAUSE")) {
+			return SIM_KEY_PAUSE;
+		}
 		// HOME
 		if (strstart(str, "HOME")) {
 			return SIM_KEY_HOME;
@@ -381,6 +410,23 @@ static utf32 str_to_key( const char *str )
 		// END
 		if (strstart(str, "END")) {
 			return SIM_KEY_END;
+		}
+		// END
+		if (strstart(str, "ESC")) {
+			// but currently fixed binding!
+			return SIM_KEY_ESCAPE;
+		}
+		if (strstart(str, "DELETE")) {
+			// but currently fixed binding!
+			return SIM_KEY_DELETE;
+		}
+		if (strstart(str, "BACKSPACE")) {
+			// but currently fixed binding!
+			return SIM_KEY_BACKSPACE;
+		}
+		// NUMPAD
+		if(  const char *c=strstart(str, "NUM_")  ) {
+			return SIM_KEY_NUMPAD_BASE + atoi( c );
 		}
 	}
 	// invalid key
@@ -459,6 +505,7 @@ void tool_t::read_menu(const std::string &objfilename)
 			char id[256];
 			sprintf( id, "%s[%i]", info[t].type, i );
 			const char *str = contents.get( id );
+
 			/* Format of str:
 			 * for general tools: icon,cursor,sound,key
 			 *     icon is image number in menu.GeneralTools, cursor image number in cursor.GeneralTools
@@ -467,12 +514,15 @@ void tool_t::read_menu(const std::string &objfilename)
 			 * -1 will disable any of them
 			 */
 			tool_t *tool = info[t].tools[i];
+
+			while(*str==' ') {
+				str++;
+			}
+
 			if(*str  &&  *str!=',') {
 				// ok, first comes icon
-				while(*str==' ') {
-					str++;
-				}
 				uint16 icon = (uint16)atoi(str);
+
 				if(  icon==0  &&  *str!='0'  ) {
 					// check, if file name ...
 					int i=0;
@@ -530,7 +580,7 @@ void tool_t::read_menu(const std::string &objfilename)
 					str++;
 				}
 				if(*str>=' ') {
-					tool->command_key = str_to_key(str);
+					tool->command_key = str_to_key(str,&(tool->command_flags));
 					char_to_tool.append(tool);
 				}
 			}
@@ -727,7 +777,7 @@ void tool_t::read_menu(const std::string &objfilename)
 					addtool->icon = icon;
 				}
 				if(key_str!=NULL) {
-					addtool->command_key = str_to_key(key_str);
+					addtool->command_key = str_to_key(key_str,&(addtool->command_flags));
 					char_to_tool.append(addtool);
 				}
 				if(param_str!=NULL  &&  ((addtool->get_id() & TOOLBAR_TOOL) == 0)) {
@@ -1066,14 +1116,14 @@ bool two_click_tool_t::is_first_click() const
 }
 
 
-bool two_click_tool_t::is_work_here_network_save(player_t *player, koord3d pos )
+bool two_click_tool_t::is_work_here_network_safe(player_t *player, koord3d pos )
 {
 	if(  !is_first_click()  ) {
 		return false;
 	}
 	const char *error = ""; //default: nosound
 	uint8 value = is_valid_pos( player, pos, error, koord3d::invalid );
-	DBG_MESSAGE("two_click_tool_t::is_work_here_network_save", "Position %s valid=%d", pos.get_str(), value );
+	DBG_MESSAGE("two_click_tool_t::is_work_here_network_safe", "Position %s valid=%d", pos.get_str(), value );
 	if(  value == 0  ) {
 		// cannot work here at all -> safe
 		return true;

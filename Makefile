@@ -92,7 +92,7 @@ ifdef OPTIMISE
     endif
   endif
 else
-  CFLAGS += -O
+  CFLAGS += -O1
 endif
 
 ifdef DEBUG
@@ -168,8 +168,9 @@ endif
 
 ifdef USE_ZSTD
   ifeq ($(shell expr $(USE_ZSTD) \>= 1), 1)
-    FLAGS      += -DUSE_ZSTD
-    LDFLAGS     += -lzstd
+    FLAGS   += -DUSE_ZSTD
+    LDFLAGS += -lzstd
+    SOURCES += io/rdwr/zstd_file_rdwr_stream.cc
   endif
 endif
 
@@ -341,6 +342,7 @@ SOURCES += gui/components/gui_label.cc
 SOURCES += gui/components/gui_map_preview.cc
 SOURCES += gui/components/gui_numberinput.cc
 SOURCES += gui/components/gui_obj_view_t.cc
+SOURCES += gui/components/gui_schedule.cc
 SOURCES += gui/components/gui_scrollbar.cc
 SOURCES += gui/components/gui_scrolled_list.cc
 SOURCES += gui/components/gui_scrollpane.cc
@@ -348,6 +350,7 @@ SOURCES += gui/components/gui_speedbar.cc
 SOURCES += gui/components/gui_tab_panel.cc
 SOURCES += gui/components/gui_textarea.cc
 SOURCES += gui/components/gui_textinput.cc
+SOURCES += gui/components/gui_waytype_tab_panel.cc
 SOURCES += gui/components/gui_world_view_t.cc
 SOURCES += gui/convoi_detail_t.cc
 SOURCES += gui/convoi_filter_frame.cc
@@ -398,13 +401,13 @@ SOURCES += gui/money_frame.cc
 SOURCES += gui/obj_info.cc
 SOURCES += gui/optionen.cc
 SOURCES += gui/pakselector.cc
+SOURCES += gui/pakinstaller.cc
 SOURCES += gui/password_frame.cc
 SOURCES += gui/player_frame_t.cc
 SOURCES += gui/privatesign_info.cc
 SOURCES += gui/savegame_frame.cc
 SOURCES += gui/scenario_frame.cc
 SOURCES += gui/scenario_info.cc
-SOURCES += gui/schedule_gui.cc
 SOURCES += gui/schedule_list.cc
 SOURCES += gui/script_tool_frame.cc
 SOURCES += gui/server_frame.cc
@@ -420,6 +423,11 @@ SOURCES += gui/tool_selector.cc
 SOURCES += gui/trafficlight_info.cc
 SOURCES += gui/vehiclelist_frame.cc
 SOURCES += gui/welt.cc
+SOURCES += io/classify_file.cc
+SOURCES += io/rdwr/bzip2_file_rdwr_stream.cc
+SOURCES += io/rdwr/raw_file_rdwr_stream.cc
+SOURCES += io/rdwr/rdwr_stream.cc
+SOURCES += io/rdwr/zlib_file_rdwr_stream.cc
 SOURCES += network/checksum.cc
 SOURCES += network/memory_rw.cc
 SOURCES += network/network.cc
@@ -432,7 +440,6 @@ SOURCES += network/network_file_transfer.cc
 SOURCES += network/network_packet.cc
 SOURCES += network/network_socket_list.cc
 SOURCES += network/pakset_info.cc
-SOURCES += network/pwd_hash.cc
 SOURCES += obj/baum.cc
 SOURCES += obj/bruecke.cc
 SOURCES += obj/crossing.cc
@@ -444,6 +451,7 @@ SOURCES += obj/leitung2.cc
 SOURCES += obj/pillar.cc
 SOURCES += obj/roadsign.cc
 SOURCES += obj/signal.cc
+SOURCES += obj/simobj.cc
 SOURCES += obj/tunnel.cc
 SOURCES += obj/wayobj.cc
 SOURCES += obj/wolke.cc
@@ -503,7 +511,6 @@ SOURCES += simmain.cc
 SOURCES += simmem.cc
 SOURCES += simmenu.cc
 SOURCES += simmesg.cc
-SOURCES += simobj.cc
 SOURCES += simplan.cc
 SOURCES += simskin.cc
 SOURCES += simsound.cc
@@ -536,17 +543,25 @@ SOURCES += squirrel/squirrel/sqvm.cc
 SOURCES += sys/simsys.cc
 SOURCES += unicode.cc
 SOURCES += utils/cbuffer_t.cc
+SOURCES += utils/checklist.cc
 SOURCES += utils/csv.cc
 SOURCES += utils/log.cc
 SOURCES += utils/searchfolder.cc
 SOURCES += utils/sha1.cc
+SOURCES += utils/sha1_hash.cc
 SOURCES += utils/simrandom.cc
 SOURCES += utils/simstring.cc
 SOURCES += utils/simthread.cc
+SOURCES += vehicle/air_vehicle.cc
 SOURCES += vehicle/movingobj.cc
-SOURCES += vehicle/simpeople.cc
+SOURCES += vehicle/pedestrian.cc
+SOURCES += vehicle/rail_vehicle.cc
+SOURCES += vehicle/road_vehicle.cc
 SOURCES += vehicle/simroadtraffic.cc
-SOURCES += vehicle/simvehicle.cc
+SOURCES += vehicle/vehicle.cc
+SOURCES += vehicle/vehicle_base.cc
+SOURCES += vehicle/water_vehicle.cc
+
 
 ifeq ($(BACKEND),allegro)
   SOURCES += sys/simsys_d.cc
@@ -566,7 +581,8 @@ endif
 ifeq ($(BACKEND),gdi)
   SOURCES += sys/simsys_w.cc
   SOURCES += music/w32_midi.cc
-  SOURCES += sound/win32_sound.cc
+  SOURCES += sound/win32_sound_xa.cc
+	LDFLAGS += -lxaudio2_8
 endif
 
 ifeq ($(BACKEND),sdl)

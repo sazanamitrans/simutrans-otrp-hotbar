@@ -1,3 +1,22 @@
+	FIX: map enlargement crashes with new climate generator
+	FIX: Wrong tooltip when building something with the finance window opened
+	CHG: Sound now plays on GDI via Xaudio2 for individual volume control
+	ADD: map only moves when numlock off, new tool to move to map view (simple_tool[36]=,keybinding,-1|0)
+	ADD: new option in simuconf.tab "numpad_always_moves_map" regardsless of numlock state
+	FIX: Wrong loading of 24 bit BMP heightmaps
+	FIX: Wrong loading of 8 bit greyscale BMP heightmaps if width is not divisible by 4
+	ADD: New height conversion modes when loading heightmaps
+	CHG: schedule/line now tab of convoi window instead independent window
+	CHG: new line list, overhauled convoi list
+	CHG: rivers now go to the sea and pass through lakes. A tiny stream becomes navigatavble after a lake or merging with another stream
+	FIX: MessageOptions can be three single images (id=0,1,2) instead of one large image
+	FIX: Potential hang when loading zstd compressed save files when multi-threading is enabled
+	CHG: crossing speed is now the max speed. No crossing, if one speed higher than maxspeed
+	ADD: construction cost tooltip also for normal tunnel construction (clicking on slopes)
+	FIX: Graphical glitches when resizing SDL2 window with -autodpi
+	ADD: special key "SCORLLOCK", "DELETE", ESCAPE", BACKSAPCE" and "+" sign for shift as modifer in tools key binding
+
+
 Release of 122.0 (r9274 on 10-Oct-2020):
 	FIX: Rotation of multi-tile buildings at street corners
 	ADD: different volumes for different sounds, realistic distance scaling (independent from screen size)
@@ -66,6 +85,7 @@ Release of 121.0 (r8870 on 1-Dec-2019):
 	FIX: IP4 address query for easyserver (to detect IP4 changes sometimes occuring for ADSL connections)
 	ADD: new simuconf.tab parameter follow_convoi_underground to slice through grounds to follow a convoi in sliced mode oder full underground mode
 	ADD: search for midi files first in pak folder, then user folder, then program folder
+	ADD: GUI for pakset install script
 
 
 Release of 120.4.1 (r8600 on 23-Sep-2018):

@@ -10,7 +10,7 @@
 #include "../dataobj/environment.h"
 #include "../dataobj/translator.h"
 #include "../player/finance.h" // MAX_PLAYER_HISTORY_YEARS
-#include "../vehicle/simvehicle.h"
+#include "../vehicle/vehicle_base.h"
 #include "settings_stats.h"
 #include "components/gui_divider.h"
 
@@ -63,6 +63,7 @@ void settings_general_stats_t::init(settings_t const* const sets)
 	INIT_INIT
 
 	// combobox for savegame version
+	savegame.clear_elements();
 	for(  uint32 i=0;  i<lengthof(version);  i++  ) {
 		savegame.new_component<gui_scrolled_list_t::const_text_scrollitem_t>( version[i]+2, SYSCOL_TEXT ) ;
 		if(  strcmp(version[i],env_t::savegame_version_str)==0  ) {
@@ -510,7 +511,9 @@ void settings_climates_stats_t::init(settings_t* const sets)
 	INIT_NUM_NEW( "Map roughness", mountain_roughness_start, 0, min(10, 11-((mountain_height_start+99)/100)), gui_numberinput_t::AUTOLINEAR, false );
 
 	SEPERATOR
+	INIT_NUM_NEW( "Wind direction", sets->wind_direction, 0, 3, 1, true );
 	// combobox for climate generator
+	climate_generate.clear_elements();
 	for(  uint32 i=0;  i<lengthof(climate_generate_string);  i++  ) {
 		climate_generate.new_component<gui_scrolled_list_t::const_text_scrollitem_t>( climate_generate_string[i], SYSCOL_TEXT ) ;
 	}
@@ -530,6 +533,8 @@ void settings_climates_stats_t::init(settings_t* const sets)
 		}
 	}
 	end_table();
+	new_component<gui_empty_t>();
+
 	INIT_NUM_NEW( "climate area percentage", sets->get_patch_size_percentage(), 0, 100, gui_numberinput_t::AUTOLINEAR, false );
 
 	SEPERATOR
@@ -544,12 +549,13 @@ void settings_climates_stats_t::init(settings_t* const sets)
 	// the following are independent and thus need no listener
 	SEPERATOR
 	// combobox for trees generator
+	tree_generate.clear_elements();
 	for(  uint32 i=0;  i<lengthof(tree_generate_string);  i++  ) {
 		tree_generate.new_component<gui_scrolled_list_t::const_text_scrollitem_t>( tree_generate_string[i], SYSCOL_TEXT ) ;
 	}
 	tree_generate.set_selection( sets->get_tree() );
 	tree_generate.set_focusable( false );
-	add_component( &tree_generate );
+	add_component( &tree_generate, 2);
 	INIT_NUM_NEW( "forest_base_size", sets->get_forest_base_size(), 10, 255, 1, false );
 	INIT_NUM_NEW( "forest_map_size_divisor", sets->get_forest_map_size_divisor(), 2, 255, 1, false );
 	INIT_NUM_NEW( "forest_count_divisor", sets->get_forest_count_divisor(), 2, 255, 1, false );
@@ -570,6 +576,7 @@ void settings_climates_stats_t::read(settings_t* const sets)
 	READ_NUM_VALUE_NEW( env_t::pak_height_conversion_factor );
 	READ_NUM_VALUE_NEW( sets->groundwater );
 	READ_NUM_VALUE_NEW( sets->max_mountain_height );
+	READ_NUM_VALUE_NEW( sets->wind_direction );
 	double n = 0;
 	READ_NUM_VALUE_NEW( n );
 	if(  new_world  ) {

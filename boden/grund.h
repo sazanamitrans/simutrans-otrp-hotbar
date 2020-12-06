@@ -97,14 +97,14 @@ public:
 	 */
 	enum flag_values {
 		keine_flags    = 0,
-		dirty          = (1<<0), ///< was changed => redraw full
-		is_kartenboden = (1<<1),
-		has_text       = (1<<2),
-		marked         = (1<<3), ///< will have a frame
-		draw_as_obj    = (1<<4), ///< is a slope etc => draw as one
-		is_halt_flag   = (1<<5), ///< is a part of a halt
-		has_way1       = (1<<6),
-		has_way2       = (1<<7)
+		dirty          = 1 << 0, ///< was changed => redraw full
+		is_kartenboden = 1 << 1,
+		has_text       = 1 << 2,
+		marked         = 1 << 3, ///< will have a frame
+		draw_as_obj    = 1 << 4, ///< is a slope etc => draw as one
+		is_halt_flag   = 1 << 5, ///< is a part of a halt
+		has_way1       = 1 << 6,
+		has_way2       = 1 << 7
 	};
 
 	/**
@@ -235,7 +235,14 @@ protected:
 	virtual void calc_image_internal(const bool calc_only_snowline_change) = 0;
 
 public:
-	enum typ { boden = 1, wasser, fundament, tunnelboden, brueckenboden, monorailboden };
+	enum typ {
+		boden = 1,
+		wasser,
+		fundament,
+		tunnelboden,
+		brueckenboden,
+		monorailboden
+	};
 
 	grund_t(koord3d pos);
 
@@ -338,10 +345,9 @@ public:
 	void open_info_window();
 
 	/**
-	* Gibt die Farbe des Beschreibungstexthintergrundes zuurck
-	* @return die Farbe des Beschreibungstexthintergrundes.
-	*/
-	FLAGGED_PIXVAL text_farbe() const;
+	 * @return player that owns the label to show it in player's colors
+	 */
+	const player_t* get_label_owner() const;
 
 	/**
 	 * Sets the label text (by copying it)
@@ -637,10 +643,12 @@ public:
 				// ways are ordered wrt to waytype
 				return NULL;
 			}
-			// try second way (if exists)
-			if (weg_t* const w = get_weg_nr(1)) {
-				if(w->get_waytype()==typ) {
-					return w;
+			if (flags & has_way2) {
+				// try second way (if exists)
+				if (weg_t* const w = get_weg_nr(1)) {
+					if (w->get_waytype() == typ) {
+						return w;
+					}
 				}
 			}
 		}

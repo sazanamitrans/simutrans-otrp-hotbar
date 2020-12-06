@@ -58,7 +58,7 @@
  * Growth calculations use 64 bit signed integers.
  * Although this is actually scale factor, a power of two is recommended for optimization purposes.
  */
-static sint64 const CITYGROWTH_PER_CITICEN = 1ll << 32; // Q31.32 fractional form.
+static sint64 const CITYGROWTH_PER_CITIZEN = 1ll << 32; // Q31.32 fractional form.
 
 karte_ptr_t stadt_t::welt; // one is enough ...
 
@@ -1083,10 +1083,10 @@ stadt_t::stadt_t(player_t* player, koord pos, sint32 citizens) :
 	// fill with start citizen ...
 	sint64 bew = get_einwohner();
 	for (uint year = 0; year < MAX_CITY_HISTORY_YEARS; year++) {
-		city_history_year[year][HIST_CITICENS] = bew;
+		city_history_year[year][HIST_CITIZENS] = bew;
 	}
 	for (uint month = 0; month < MAX_CITY_HISTORY_MONTHS; month++) {
-		city_history_month[month][HIST_CITICENS] = bew;
+		city_history_month[month][HIST_CITIZENS] = bew;
 	}
 
 	// initialize history array
@@ -1100,8 +1100,8 @@ stadt_t::stadt_t(player_t* player, koord pos, sint32 citizens) :
 			city_history_month[month][hist_type] = 0;
 		}
 	}
-	city_history_year[0][HIST_CITICENS]  = get_einwohner();
-	city_history_month[0][HIST_CITICENS] = get_einwohner();
+	city_history_year[0][HIST_CITIZENS]  = get_einwohner();
+	city_history_month[0][HIST_CITIZENS] = get_einwohner();
 #ifdef DESTINATION_CITYCARS
 	number_of_cars = 0;
 #endif
@@ -1185,8 +1185,8 @@ void stadt_t::rdwr(loadsave_t* file)
 				city_history_month[month][hist_type] = 0;
 			}
 		}
-		city_history_year[0][HIST_CITICENS] = get_einwohner();
-		city_history_year[0][HIST_CITICENS] = get_einwohner();
+		city_history_year[0][HIST_CITIZENS] = get_einwohner();
+		city_history_year[0][HIST_CITIZENS] = get_einwohner();
 	}
 
 	// we probably need to load/save the city history
@@ -1452,7 +1452,7 @@ void stadt_t::change_size( sint64 delta_citizen, bool new_town)
 {
 	DBG_MESSAGE("stadt_t::change_size()", "%i + %i", bev, delta_citizen);
 	if(  delta_citizen > 0  ) {
-		unsupplied_city_growth += delta_citizen * CITYGROWTH_PER_CITICEN;
+		unsupplied_city_growth += delta_citizen * CITYGROWTH_PER_CITIZEN;
 		step_grow_city(new_town);
 	}
 	if(  delta_citizen < 0  ) {
@@ -1503,11 +1503,11 @@ void stadt_t::step(uint32 delta_t)
 	}
 
 	// update history (might be changed do to construction/destroying of houses)
-	city_history_month[0][HIST_CITICENS] = get_einwohner(); // total number
-	city_history_year[0][HIST_CITICENS] = get_einwohner();
+	city_history_month[0][HIST_CITIZENS] = get_einwohner(); // total number
+	city_history_year[0][HIST_CITIZENS] = get_einwohner();
 
-	city_history_month[0][HIST_GROWTH] = city_history_month[0][HIST_CITICENS]-city_history_month[1][HIST_CITICENS]; // growth
-	city_history_year[0][HIST_GROWTH] = city_history_year[0][HIST_CITICENS]-city_history_year[1][HIST_CITICENS];
+	city_history_month[0][HIST_GROWTH] = city_history_month[0][HIST_CITIZENS]-city_history_month[1][HIST_CITIZENS]; // growth
+	city_history_year[0][HIST_GROWTH] = city_history_year[0][HIST_CITIZENS]-city_history_year[1][HIST_CITIZENS];
 
 	city_history_month[0][HIST_BUILDING] = buildings.get_count();
 	city_history_year[0][HIST_BUILDING] = buildings.get_count();
@@ -1528,7 +1528,7 @@ void stadt_t::roll_history()
 	for (int hist_type = 1; hist_type < MAX_CITY_HISTORY; hist_type++) {
 		city_history_month[0][hist_type] = 0;
 	}
-	city_history_month[0][HIST_CITICENS] = get_einwohner();
+	city_history_month[0][HIST_CITIZENS] = get_einwohner();
 	city_history_month[0][HIST_BUILDING] = buildings.get_count();
 	city_history_month[0][HIST_GOODS_NEEDED] = 0;
 
@@ -1543,7 +1543,7 @@ void stadt_t::roll_history()
 		for (int hist_type = 1; hist_type < MAX_CITY_HISTORY; hist_type++) {
 			city_history_year[0][hist_type] = 0;
 		}
-		city_history_year[0][HIST_CITICENS] = get_einwohner();
+		city_history_year[0][HIST_CITIZENS] = get_einwohner();
 		city_history_year[0][HIST_BUILDING] = buildings.get_count();
 		city_history_year[0][HIST_GOODS_NEEDED] = 0;
 	}
@@ -1691,7 +1691,7 @@ void stadt_t::new_month( bool recalc_destinations )
 		double gfactor = (double)(city_history_month[1][HIST_GOODS_RECEIVED]) / (double)(city_history_month[1][HIST_GOODS_NEEDED]+1);
 
 		double factor = pfactor > mfactor ? (gfactor > pfactor ? gfactor : pfactor ) : mfactor;
-		factor = (1.0-factor)*city_history_month[1][HIST_CITICENS];
+		factor = (1.0-factor)*city_history_month[1][HIST_CITIZENS];
 		factor = log10( factor );
 		*/
 
@@ -1705,8 +1705,8 @@ void stadt_t::new_month( bool recalc_destinations )
 
 		// true if s1[0] / s1[1] > s2[0] / s2[1]
 #		define comp_stats(s1,s2) ( s1[0]*s2[1] > s2[0]*s1[1] )
-		// computes (1.0 - s[0]/s[1]) * city_history_month[1][HIST_CITICENS]
-#		define comp_factor(s) (city_history_month[1][HIST_CITICENS] *( s[1]-s[0] )) / s[1]
+		// computes (1.0 - s[0]/s[1]) * city_history_month[1][HIST_CITIZENS]
+#		define comp_factor(s) (city_history_month[1][HIST_CITIZENS] *( s[1]-s[0] )) / s[1]
 
 		uint32 factor = (uint32)( comp_stats(pax_stat, mail_stat) ? (comp_stats(good_stat, pax_stat) ? comp_factor(good_stat) : comp_factor(pax_stat)) : comp_factor(mail_stat) );
 		factor = log10(factor);
@@ -1790,7 +1790,7 @@ void stadt_t::calc_growth()
 	sint32 growth_factor = weight_factor > 0 ? total_supply_percentage / weight_factor : 0;
 
 	// Scale up growth to have a larger fractional component. This allows small growth units to accumulate in the case of long months.
-	sint64 new_unsupplied_city_growth = growth_factor * (CITYGROWTH_PER_CITICEN / 16);
+	sint64 new_unsupplied_city_growth = growth_factor * (CITYGROWTH_PER_CITIZEN / 16);
 
 	// Growth is scaled down by month length.
 	// The result is that ~ the same monthly growth will occur independent of month length.
@@ -1809,9 +1809,9 @@ void stadt_t::step_grow_city( bool new_town )
 	int num_tries = new_town ? 1000 : 30;
 
 	// since we use internally a finer value ...
-	const sint64 growth_steps = unsupplied_city_growth / CITYGROWTH_PER_CITICEN;
+	const sint64 growth_steps = unsupplied_city_growth / CITYGROWTH_PER_CITIZEN;
 	if(  growth_steps > 0  ) {
-		unsupplied_city_growth %= CITYGROWTH_PER_CITICEN;
+		unsupplied_city_growth %= CITYGROWTH_PER_CITIZEN;
 	}
 
 	// let city grow in steps of 1
@@ -3544,22 +3544,22 @@ bool stadt_t::build_road(const koord k, player_t* player_, bool forced)
 	ribi_t::ribi connection_roads = ribi_t::none;
 	// add ribi's to connection_roads if possible
 	for (int r = 0; r < 4; r++) {
-		if (ribi_t::nsew[r] & allowed_dir) {
+		if (ribi_t::nesw[r] & allowed_dir) {
 			// now we have to check for several problems ...
 			grund_t* bd2;
-			if(bd->get_neighbour(bd2, invalid_wt, ribi_t::nsew[r])) {
+			if(bd->get_neighbour(bd2, invalid_wt, ribi_t::nesw[r])) {
 				if(bd2->get_typ()==grund_t::fundament  ||  bd2->get_typ()==grund_t::wasser) {
 					// not connecting to a building of course ...
 				}
 				else if (!bd2->ist_karten_boden()) {
 					// do not connect to elevated ways / bridges
 				}
-				else if (bd2->get_typ()==grund_t::tunnelboden  &&  ribi_t::nsew[r]!=ribi_type(bd2->get_grund_hang())) {
+				else if (bd2->get_typ()==grund_t::tunnelboden  &&  ribi_t::nesw[r]!=ribi_type(bd2->get_grund_hang())) {
 					// not the correct slope
 				}
 				else if (bd2->get_typ()==grund_t::brueckenboden
-					&&  (bd2->get_grund_hang()==slope_t::flat  ?  ribi_t::nsew[r]!=ribi_type(bd2->get_weg_hang())
-					                                           :  ribi_t::backward(ribi_t::nsew[r])!=ribi_type(bd2->get_grund_hang()))) {
+					&&  (bd2->get_grund_hang()==slope_t::flat  ?  ribi_t::nesw[r]!=ribi_type(bd2->get_weg_hang())
+					                                           :  ribi_t::backward(ribi_t::nesw[r])!=ribi_type(bd2->get_grund_hang()))) {
 					// not the correct slope
 				}
 				else if(bd2->hat_weg(road_wt)) {
@@ -3569,16 +3569,16 @@ bool stadt_t::build_road(const koord k, player_t* player_, bool forced)
 						// nothing to connect
 						if(layouts==4) {
 							// single way
-							if(ribi_t::nsew[r]==ribi_t::backward(ribi_t::layout_to_ribi[gb->get_tile()->get_layout()])) {
+							if(ribi_t::nesw[r]==ribi_t::backward(ribi_t::layout_to_ribi[gb->get_tile()->get_layout()])) {
 								// allowed ...
-								connection_roads |= ribi_t::nsew[r];
+								connection_roads |= ribi_t::nesw[r];
 							}
 						}
 						else if(layouts==2 || layouts==8 || layouts==16) {
 							// through way
-							if((ribi_t::doubles( ribi_t::layout_to_ribi[gb->get_tile()->get_layout() & 1] )&ribi_t::nsew[r])!=0) {
+							if((ribi_t::doubles( ribi_t::layout_to_ribi[gb->get_tile()->get_layout() & 1] )&ribi_t::nesw[r])!=0) {
 								// allowed ...
-								connection_roads |= ribi_t::nsew[r];
+								connection_roads |= ribi_t::nesw[r];
 							}
 						}
 						else {
@@ -3594,7 +3594,7 @@ bool stadt_t::build_road(const koord k, player_t* player_, bool forced)
 						bauer.init_builder( way_builder_t::strasse | way_builder_t::terraform_flag, welt->get_city_road() );
 						if(  bauer.check_slope( bd, bd2 )  ) {
 							// allowed ...
-							connection_roads |= ribi_t::nsew[r];
+							connection_roads |= ribi_t::nesw[r];
 						}
 					}
 				}
@@ -3604,10 +3604,10 @@ bool stadt_t::build_road(const koord k, player_t* player_, bool forced)
 
 	// now add the ribis to the other ways (if there)
 	for (int r = 0; r < 4; r++) {
-		if (ribi_t::nsew[r] & connection_roads) {
-			grund_t* bd2 = welt->lookup_kartenboden(k + koord::nsew[r]);
+		if (ribi_t::nesw[r] & connection_roads) {
+			grund_t* bd2 = welt->lookup_kartenboden(k + koord::nesw[r]);
 			weg_t* w2 = bd2->get_weg(road_wt);
-			w2->ribi_add(ribi_t::backward(ribi_t::nsew[r]));
+			w2->ribi_add(ribi_t::backward(ribi_t::nesw[r]));
 			bd2->calc_image();
 			bd2->set_flag( grund_t::dirty );
 		}

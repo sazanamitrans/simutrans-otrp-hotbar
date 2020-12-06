@@ -25,10 +25,17 @@
  */
 class del_button_t : public button_t
 {
+	scr_coord_val w;
 public:
-	del_button_t() : button_t() { init(button_t::roundbox, "X"); }
-
-	scr_size get_min_size() const OVERRIDE { return scr_size(D_BUTTON_HEIGHT, D_BUTTON_HEIGHT); }
+	del_button_t() : button_t()
+	{
+		init(button_t::roundbox, "X");
+		w = max(D_BUTTON_HEIGHT, display_get_char_width('X') + gui_theme_t::gui_button_text_offset.w + gui_theme_t::gui_button_text_offset_right.x);
+	}
+	scr_size get_min_size() const OVERRIDE
+	{
+		return scr_size(w, D_BUTTON_HEIGHT);
+	}
 };
 
 /**
@@ -153,10 +160,10 @@ void savegame_frame_t::add_section(std::string &name){
 	char *label_text = new char [L_SHORTENED_SIZE+prefix_len+2];
 	char *path_expanded = new char[FILENAME_MAX];
 
-	size_t program_dir_len = strlen(env_t::program_dir);
+	const size_t data_dir_len = strlen(env_t::data_dir);
 
-	if (strncmp(name.c_str(),env_t::program_dir,program_dir_len) == 0) {
-		// starts with program_dir
+	if(  name[0]=='/'  ||  name[0]=='\\'  ||  name[1]==':'  ||  strncmp(name.c_str(),env_t::data_dir,data_dir_len) == 0  ) {
+		// starts with data_dir or an absolute path
 		tstrncpy(path_expanded, name.c_str(), FILENAME_MAX);
 	}
 	else {

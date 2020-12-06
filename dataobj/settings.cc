@@ -16,8 +16,9 @@
 #include "../descriptor/way_desc.h"
 #include "../utils/simrandom.h"
 #include "../utils/simstring.h"
-#include "../vehicle/simvehicle.h"
+#include "../vehicle/vehicle_base.h"
 #include "../player/simplay.h"
+#include "../sys/simsys.h"
 #include "loadsave.h"
 #include "tabfile.h"
 #include "translator.h"
@@ -326,7 +327,7 @@ void settings_t::set_default_climates()
 	moisture_water = 1;
 	winter_snowline = 7;
 
-	//	climate_wind_direction = ribit_t::dir_east;
+	wind_direction = ribi_t::west; // west wind
 }
 
 
@@ -745,8 +746,12 @@ void settings_t::rdwr(loadsave_t *file)
 		}
 		if(file->is_version_atleast(102, 3)) {
 			// network stuff
-			random_counter = get_random_seed( );
-			file->rdwr_long( random_counter );
+			// Superseded by simrand_rdwr in newer versions
+			if (file->is_version_less(122, 1)) {
+				random_counter = get_random_seed( );
+				file->rdwr_long( random_counter );
+			}
+
 			if(  !env_t::networkmode  ||  env_t::server  ) {
 				frames_per_second = clamp(env_t::fps, 5u, 100u); // update it on the server to the current setting
 				frames_per_step = env_t::network_frames_per_step;
@@ -886,9 +891,27 @@ void settings_t::rdwr(loadsave_t *file)
 		if(  file->is_version_atleast(120, 7) ) {
 			file->rdwr_byte(world_maximum_height);
 			file->rdwr_byte(world_minimum_height);
+
+			world_maximum_height = clamp<sint8>(world_maximum_height, 16, 127);
+			world_minimum_height = clamp<sint8>(world_minimum_height, -127, -12);
 		}
 		if(  file->is_version_atleast(120, 9)  ) {
 			file->rdwr_long(allow_merge_distant_halt);
+		}
+		if(  file->is_version_atleast(122, 1)  ) {
+			file->rdwr_enum(climate_generator);
+			file->rdwr_byte( wind_direction );
+		}
+		else if( file->is_loading() ) {
+			climate_generator = HEIGHT_BASED;
+
+			switch (rotation) {
+				default:
+				case 0: wind_direction = ribi_t::west;  break;
+				case 1: wind_direction = ribi_t::north; break;
+				case 2: wind_direction = ribi_t::east;  break;
+				case 3: wind_direction = ribi_t::south; break;
+			}
 		}
 		// otherwise the default values of the last one will be used
 	}
@@ -966,7 +989,8 @@ void settings_t::parse_simuconf( tabfile_t& simuconf, sint16& disp_width, sint16
 	env_t::max_acceleration = contents.get_int( "fast_forward", env_t::max_acceleration );
 	env_t::fps = clamp( (uint32)contents.get_int( "frames_per_second", env_t::fps ), env_t::min_fps, env_t::max_fps );
 	env_t::ff_fps = clamp( (uint32)contents.get_int( "fast_forward_frames_per_second", env_t::ff_fps ), env_t::min_fps, env_t::max_fps );
-	env_t::num_threads = clamp( contents.get_int( "threads", env_t::num_threads ), 1, MAX_THREADS );
+	env_t::num_threads = clamp( (uint8)contents.get_int( "threads", env_t::num_threads ), (uint8)1, dr_get_max_threads() );
+	env_t::num_threads = min( env_t::num_threads, MAX_THREADS );
 	env_t::simple_drawing_default = contents.get_int( "simple_drawing_tile_size", env_t::simple_drawing_default );
 	env_t::simple_drawing_fast_forward = contents.get_int( "simple_drawing_fast_forward", env_t::simple_drawing_fast_forward );
 	env_t::visualize_schedule = contents.get_int( "visualize_schedule", env_t::visualize_schedule ) != 0;
@@ -978,6 +1002,7 @@ void settings_t::parse_simuconf( tabfile_t& simuconf, sint16& disp_width, sint16
 	env_t::chat_window_transparency = contents.get_int( "chat_transparency", env_t::chat_window_transparency );
 
 	env_t::hide_keyboard = contents.get_int( "hide_keyboard", env_t::hide_keyboard ) != 0;
+	env_t::numpad_always_moves_map = contents.get_int( "numpad_always_moves_map", env_t::numpad_always_moves_map );
 
 	env_t::player_finance_display_account = contents.get_int( "player_finance_display_account", env_t::player_finance_display_account ) != 0;
 
@@ -1359,7 +1384,8 @@ void settings_t::parse_simuconf( tabfile_t& simuconf, sint16& disp_width, sint16
 	starting_year = contents.get_int( "starting_year", starting_year );
 	starting_month = contents.get_int( "starting_month", starting_month + 1 ) - 1;
 
-	env_t::new_height_map_conversion = contents.get_int( "new_height_map_conversion", env_t::new_height_map_conversion );
+	env_t::height_conv_mode = (env_t::height_conversion_mode)::clamp<int>(contents.get_int("new_height_map_conversion", (int)env_t::height_conv_mode ), 0, env_t::NUM_HEIGHT_CONV_MODES-1);
+
 	river_number = contents.get_int( "river_number", river_number );
 	min_river_length = contents.get_int( "river_min_length", min_river_length );
 	max_river_length = contents.get_int( "river_max_length", max_river_length );
@@ -1530,13 +1556,11 @@ void settings_t::parse_simuconf( tabfile_t& simuconf, sint16& disp_width, sint16
 	max_rail_convoi_length = contents.get_int("max_rail_convoi_length",max_rail_convoi_length);
 	max_road_convoi_length = contents.get_int("max_road_convoi_length",max_road_convoi_length);
 	max_ship_convoi_length = contents.get_int("max_ship_convoi_length",max_ship_convoi_length);
-	max_air_convoi_length = contents.get_int("max_air_convoi_length",max_air_convoi_length);
+	max_air_convoi_length  = contents.get_int("max_air_convoi_length",max_air_convoi_length);
 
-	world_maximum_height = contents.get_int("world_maximum_height",world_maximum_height);
-	world_minimum_height = contents.get_int("world_minimum_height",world_minimum_height);
-	if(  world_minimum_height>=world_maximum_height  ) {
-		world_minimum_height = world_maximum_height-1;
-	}
+	// note: no need to check for min_height < max_height, since -12 < 16
+	world_maximum_height = clamp(contents.get_int("world_maximum_height",world_maximum_height), 16, 127);
+	world_minimum_height = clamp(contents.get_int("world_minimum_height",world_minimum_height), -127, -12);
 
 	// Default pak file path
 	objfilename = ltrim(contents.get_string("pak_file_path", "" ) );

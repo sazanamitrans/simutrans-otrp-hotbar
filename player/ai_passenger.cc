@@ -26,7 +26,7 @@
 #include "../utils/simrandom.h"
 #include "../utils/simstring.h"
 
-#include "../vehicle/simvehicle.h"
+#include "../vehicle/vehicle.h"
 
 #include "ai_passenger.h"
 #include "finance.h"
@@ -569,14 +569,14 @@ halthandle_t ai_passenger_t::build_airport(const stadt_t* city, koord pos, int r
 	// now the airstops (only on single tiles, this will always work
 	const building_desc_t* airstop_desc = hausbauer_t::get_random_station(building_desc_t::generic_stop, air_wt, welt->get_timeline_year_month(), 0 );
 	for(  int i=0;  i<4;  i++  ) {
-		if(  koord_distance(center+koord::nsew[i],bushalt)==1  &&  ribi_t::is_single( welt->lookup_kartenboden(center+koord::nsew[i])->get_weg_ribi_unmasked(air_wt) )  ) {
-			call_general_tool( TOOL_BUILD_STATION, center+koord::nsew[i], airstop_desc->get_name() );
+		if(  koord_distance(center+koord::nesw[i],bushalt)==1  &&  ribi_t::is_single( welt->lookup_kartenboden(center+koord::nesw[i])->get_weg_ribi_unmasked(air_wt) )  ) {
+			call_general_tool( TOOL_BUILD_STATION, center+koord::nesw[i], airstop_desc->get_name() );
 		}
 	}
 	// and now the one far away ...
 	for(  int i=0;  i<4;  i++  ) {
-		if(  koord_distance(center+koord::nsew[i],bushalt)>1  &&  ribi_t::is_single( welt->lookup_kartenboden(center+koord::nsew[i])->get_weg_ribi_unmasked(air_wt) )  ) {
-			call_general_tool( TOOL_BUILD_STATION, center+koord::nsew[i], airstop_desc->get_name() );
+		if(  koord_distance(center+koord::nesw[i],bushalt)>1  &&  ribi_t::is_single( welt->lookup_kartenboden(center+koord::nesw[i])->get_weg_ribi_unmasked(air_wt) )  ) {
+			call_general_tool( TOOL_BUILD_STATION, center+koord::nesw[i], airstop_desc->get_name() );
 		}
 	}
 	// success
@@ -815,13 +815,13 @@ void ai_passenger_t::walk_city(linehandle_t const line, grund_t* const start, in
 	for(int r=0; r<4; r++) {
 
 		// a way in our direction?
-		if(  (ribi & ribi_t::nsew[r])==0  ) {
+		if(  (ribi & ribi_t::nesw[r])==0  ) {
 			continue;
 		}
 
 		// ok, if connected, not marked, and not owner by somebody else
 		grund_t *to;
-		if(  start->get_neighbour(to, road_wt, ribi_t::nsew[r] )  &&  !marker->is_marked(to)  &&  check_owner(to->obj_bei(0)->get_owner(),this)  ) {
+		if(  start->get_neighbour(to, road_wt, ribi_t::nesw[r] )  &&  !marker->is_marked(to)  &&  check_owner(to->obj_bei(0)->get_owner(),this)  ) {
 
 			// ok, here is a valid street tile
 			marker->mark(to);
@@ -1436,8 +1436,15 @@ void ai_passenger_t::rdwr(loadsave_t *file)
 		k3d.rdwr(file);
 		ziel = fabrik_t::get_fab(k3d.get_2d() );
 	}
-}
 
+	if (file->is_version_atleast(122, 1)) {
+		plainstring road_vehicle_name = road_vehicle ? road_vehicle->get_name() : "";
+		file->rdwr_str(road_vehicle_name);
+		if (file->is_loading() && road_vehicle_name != "") {
+			road_vehicle = vehicle_builder_t::get_info(road_vehicle_name);
+		}
+	}
+}
 
 
 /**
@@ -1458,7 +1465,11 @@ void ai_passenger_t::report_vehicle_problem(convoihandle_t cnv,const koord3d zie
 
 void ai_passenger_t::finish_rd()
 {
-	road_vehicle = vehikel_search( road_wt, 50, 80, goods_manager_t::passengers, false);
+	if (!road_vehicle) {
+		dbg->warning("ai_passenger_t::finish_rd", "Default road vehicle could not be loaded, searching for one...");
+		road_vehicle = vehikel_search( road_wt, 50, 80, goods_manager_t::passengers, false);
+	}
+
 	if (road_vehicle == NULL) {
 		// reset state
 		end_stadt = NULL;

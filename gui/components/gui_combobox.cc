@@ -81,7 +81,7 @@ DBG_MESSAGE("event","HOWDY!");
 			return true;
 		}
 	}
-	else if(  IS_WHEELUP(ev)  ||  IS_WHEELDOWN(ev)  ) {
+	else if(  (IS_WHEELUP(ev)  ||  IS_WHEELDOWN(ev))  &&  droplist.getroffen(ev->mx + get_pos().x, ev->my + get_pos().y)  ) {
 		// scroll the list
 		droplist.infowin_event(ev);
 		return true;
@@ -355,7 +355,7 @@ void gui_combobox_t::set_size(scr_size size)
 	textinp.set_size( scr_size( size.w - bt_prev.get_size().w - bt_next.get_size().w - D_H_SPACE, closed_size.h-D_V_SPACE/2  ) );
 	set_pos(get_pos());
 
-	bt_prev.set_pos( scr_coord(0,(size.h-D_POS_BUTTON_HEIGHT)/2) );
+	bt_prev.set_pos( scr_coord(0,(size.h-D_ARROW_LEFT_HEIGHT)/2) );
 	textinp.align_to( &bt_prev, ALIGN_LEFT | ALIGN_EXTERIOR_H | ALIGN_CENTER_V, scr_coord( pos.x + D_H_SPACE / 2, pos.y ) );
 	bt_next.align_to( &textinp, ALIGN_LEFT | ALIGN_EXTERIOR_H | ALIGN_CENTER_V, scr_coord( -pos.x + D_H_SPACE / 2, -pos.y ) );
 }

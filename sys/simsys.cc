@@ -30,6 +30,7 @@
 
 
 #ifdef _WIN32
+#	include <locale>
 #	include <windows.h>
 #	include <winbase.h>
 #	include <shellapi.h>
@@ -48,9 +49,11 @@
 #	endif
 #endif
 
+#if __cplusplus >= 201103L
+#include <thread>
+#endif
 
-
-struct sys_event sys_event;
+sys_event_t sys_event;
 
 
 #ifdef _WIN32
@@ -135,6 +138,26 @@ int get_mouse_y()
 
 
 
+uint8 dr_get_max_threads()
+{
+	uint8 max_threads = 0;
+
+#if __cplusplus >= 201103L
+	max_threads = std::thread::hardware_concurrency();
+#endif
+	if(max_threads==0) {
+#ifdef _WIN32
+		SYSTEM_INFO sysinfo;
+		GetSystemInfo(&sysinfo);
+		max_threads = (uint8)sysinfo.dwNumberOfProcessors;
+#else 
+		max_threads = sysconf(_SC_NPROCESSORS_ONLN);
+#endif
+	}
+	return max(max_threads,1);
+}
+
+
 int dr_mkdir(char const* const path)
 {
 #ifdef _WIN32
@@ -172,7 +195,7 @@ bool dr_movetotrash(const char *path)
 
 	// Initalize file operation structure.
 	SHFILEOPSTRUCTW  FileOp;
-	FileOp.hwnd = NULL;
+	FileOp.hwnd = GetActiveWindow();
 	FileOp.wFunc = FO_DELETE;
 	FileOp.pFrom = full_wpath;
 	FileOp.pTo = NULL;
@@ -182,6 +205,8 @@ bool dr_movetotrash(const char *path)
 	int success = SHFileOperationW(&FileOp);
 
 	delete[] full_wpath;
+
+	BringWindowToTop(FileOp.hwnd);
 
 	return success;
 #else
@@ -985,16 +1010,16 @@ void dr_fatal_notify(char const* const msg)
 
 /**
  * Open a program/starts a script to download pak sets from sourceforge
- * @param path_to_program : actual simutrans pakfile directory
+ * @param data_dir : actual simutrans pakfile directory
  * @return false, if nothing was downloaded
  */
-bool dr_download_pakset( const char *path_to_program, bool portable )
+bool dr_download_pakset( const char *data_dir, bool portable )
 {
 #ifdef _WIN32
 	std::string param(portable ? "/P /D=" : "/D=");
-	param.append(path_to_program);
+	param.append(data_dir);
 	U16View const wparam(param.c_str());
-	U16View const wpath_to_program(path_to_program);
+	U16View const wpath_to_program(data_dir);
 
 	SHELLEXECUTEINFOW shExInfo;
 	shExInfo.cbSize = sizeof(shExInfo);
@@ -1021,7 +1046,8 @@ bool dr_download_pakset( const char *path_to_program, bool portable )
 	(void)portable;
 
 	char command[2048];
-	sprintf(command, "%s/get_pak.sh", path_to_program);
+	chdir( data_dir );
+	sprintf(command, "%s/get_pak.sh", data_dir);
 	system( command );
 	return true;
 #endif

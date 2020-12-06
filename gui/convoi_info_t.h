@@ -8,17 +8,19 @@
 
 
 #include "gui_frame.h"
+#include "components/action_listener.h"
+#include "components/gui_button.h"
+#include "components/gui_button_to_chart.h"
+#include "components/gui_chart.h"
+#include "components/gui_combobox.h"
+#include "components/gui_label.h"
+#include "components/gui_obj_view_t.h"
+#include "components/gui_schedule.h"
 #include "components/gui_scrollpane.h"
+#include "components/gui_speedbar.h"
+#include "components/gui_tab_panel.h"
 #include "components/gui_textarea.h"
 #include "components/gui_textinput.h"
-#include "components/gui_speedbar.h"
-#include "components/gui_button.h"
-#include "components/gui_label.h"
-#include "components/gui_chart.h"
-#include "components/gui_obj_view_t.h"
-#include "components/action_listener.h"
-#include "components/gui_tab_panel.h"
-#include "components/gui_button_to_chart.h"
 #include "../convoihandle_t.h"
 #include "simwin.h"
 
@@ -32,7 +34,13 @@ class convoi_detail_t;
 class convoi_info_t : public gui_frame_t, private action_listener_t
 {
 public:
-	enum sort_mode_t { by_destination=0, by_via=1, by_amount_via=2, by_amount=3, SORT_MODES=4 };
+	enum sort_mode_t {
+		by_destination = 0,
+		by_via         = 1,
+		by_amount_via  = 2,
+		by_amount      = 3,
+		SORT_MODES     = 4
+	};
 
 private:
 	/**
@@ -48,19 +56,27 @@ private:
 	gui_speedbar_t speed_bar;
 	gui_routebar_t route_bar;
 	gui_chart_t chart;
-	button_t button;
-	button_t follow_button;
-	button_t go_home_button;
-	button_t no_load_button;
 
 	gui_tab_panel_t switch_mode;
-	gui_aligned_container_t container_freight, container_stats, container_line, *container_top, container_details;
+	gui_aligned_container_t container_freight, container_schedule, container_stats, *container_top, container_details;
 	convoi_detail_t *details;
 	gui_scrollpane_t scroll_freight;
 
 	button_t sort_button;
-	button_t line_button; // goto line ...
+	button_t line_button;
 	bool line_bound;
+
+	// schedule handling
+	button_t go_home_button;
+	button_t no_load_button;
+	button_t sale_button;
+	button_t withdraw_button;
+	gui_combobox_t line_selector;
+	// to add new lines automatically
+	uint32 old_line_count;
+	linehandle_t line, old_line;
+	gui_schedule_t scd;
+
 
 	convoihandle_t cnv;
 	sint32 mean_convoi_speed;
@@ -89,8 +105,11 @@ private:
 	gui_button_to_chart_array_t button_to_chart;
 
 	void init(convoihandle_t cnv);
+
+	void apply_schedule();
+
 public:
-	convoi_info_t(convoihandle_t cnv = convoihandle_t());
+	convoi_info_t(convoihandle_t cnv = convoihandle_t(), bool change_schedule = false);
 
 	virtual ~convoi_info_t();
 
@@ -118,11 +137,17 @@ public:
 	 */
 	void update_data() { reset_cnv_name(); set_dirty(); }
 
+	void init_line_selector();
+
+	bool infowin_event( const event_t *ev ) OVERRIDE;
+
 	void rdwr( loadsave_t *file ) OVERRIDE;
 
 	uint32 get_rdwr_id() OVERRIDE { return magic_convoi_info; }
 
 	void route_search_finished() { route_search_in_progress = false; }
+
+	void change_schedule();
 };
 
 #endif

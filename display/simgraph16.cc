@@ -1121,7 +1121,7 @@ void set_zoom_factor(int z)
 	if(  (base_tile_raster_width * zoom_num[z]) / zoom_den[z] > 4  ) {
 		zoom_factor = z;
 		tile_raster_width = (base_tile_raster_width * zoom_num[zoom_factor]) / zoom_den[zoom_factor];
-		fprintf(stderr, "set_zoom_factor() : set %d (%i/%i)\n", zoom_factor, zoom_num[zoom_factor], zoom_den[zoom_factor] );
+		dbg->message("set_zoom_factor()", "Zoom level now %d (%i/%i)", zoom_factor, zoom_num[zoom_factor], zoom_den[zoom_factor] );
 		rezoom();
 	}
 }
@@ -2307,8 +2307,8 @@ static inline void colorpixcopy(PIXVAL *dest, const PIXVAL *src, const PIXVAL* c
  * to be used in display_img_pc
  */
 enum pixcopy_routines {
-	plain = 0,  /// simply copies the pixels
-	colored = 1 /// replaces player colors
+	plain   = 0, /// simply copies the pixels
+	colored = 1  /// replaces player colors
 };
 
 
@@ -5063,10 +5063,10 @@ void display_show_load_pointer(int loading)
 /**
  * Initialises the graphics module
  */
-void simgraph_init(KOORD_VAL width, KOORD_VAL height, int full_screen)
+void simgraph_init(scr_size window_size, bool full_screen)
 {
-	disp_actual_width = width;
-	disp_height = height;
+	disp_actual_width = window_size.w;
+	disp_height = window_size.h;
 
 #ifdef MULTI_THREAD
 	pthread_mutex_init( &recode_img_mutex, NULL );
@@ -5083,7 +5083,7 @@ void simgraph_init(KOORD_VAL width, KOORD_VAL height, int full_screen)
 	}
 
 	// get real width from os-dependent routines
-	disp_width = dr_os_open(width, height, full_screen);
+	disp_width = dr_os_open(window_size.w, window_size.h, full_screen);
 	if(  disp_width>0  ) {
 		textur = dr_textur_init();
 
@@ -5179,7 +5179,7 @@ void simgraph_init(KOORD_VAL width, KOORD_VAL height, int full_screen)
 /**
  * Check if the graphic module already was initialized.
  */
-int is_display_init()
+bool is_display_init()
 {
 	return textur != NULL  &&  default_font.is_loaded()  &&  images!=NULL;
 }
@@ -5210,18 +5210,18 @@ void simgraph_exit()
 
 /* changes display size
  */
-void simgraph_resize(KOORD_VAL w, KOORD_VAL h)
+void simgraph_resize(scr_size new_window_size)
 {
-	disp_actual_width = max( 16, w );
-	if(  h<=0  ) {
-		h = 64;
+	disp_actual_width = max( 16, new_window_size.w );
+	if(  new_window_size.h<=0  ) {
+		new_window_size.h = 64;
 	}
 	// only resize, if internal values are different
-	if (disp_width != w || disp_height != h) {
-		KOORD_VAL new_width = dr_textur_resize(&textur, w, h);
-		if(  new_width!=disp_width  ||  disp_height != h) {
-			disp_width = new_width;
-			disp_height = h;
+	if (disp_width != new_window_size.w || disp_height != new_window_size.h) {
+		KOORD_VAL new_pitch = dr_textur_resize(&textur, new_window_size.w, new_window_size.h);
+		if(  new_pitch!=disp_width  ||  disp_height != new_window_size.h) {
+			disp_width = new_pitch;
+			disp_height = new_window_size.h;
 
 			free( tile_dirty_old );
 			free( tile_dirty);

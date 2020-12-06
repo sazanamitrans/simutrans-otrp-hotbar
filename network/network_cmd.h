@@ -11,12 +11,14 @@
 #include "../tpl/slist_tpl.h"
 #include "../tpl/vector_tpl.h"
 #include "network.h"
-#include "pwd_hash.h"
+#include "../utils/sha1_hash.h"
+
 
 class address_list_t;
 class karte_t;
 class packet_t;
 class socket_info_t;
+
 
 // actual commands
 enum {
@@ -98,17 +100,17 @@ public:
 	uint32 flag;
 
 	enum {
-		SRVC_LOGIN_ADMIN     = 0,
-		SRVC_ANNOUNCE_SERVER = 1,
-		SRVC_GET_CLIENT_LIST = 2,
-		SRVC_KICK_CLIENT     = 3,
-		SRVC_BAN_CLIENT      = 4,
-		SRVC_GET_BLACK_LIST  = 5,
-		SRVC_BAN_IP          = 6,
-		SRVC_UNBAN_IP        = 7,
-		SRVC_ADMIN_MSG       = 8,
-		SRVC_SHUTDOWN        = 9,
-		SRVC_FORCE_SYNC      = 10,
+		SRVC_LOGIN_ADMIN      = 0,
+		SRVC_ANNOUNCE_SERVER  = 1,
+		SRVC_GET_CLIENT_LIST  = 2,
+		SRVC_KICK_CLIENT      = 3,
+		SRVC_BAN_CLIENT       = 4,
+		SRVC_GET_BLACK_LIST   = 5,
+		SRVC_BAN_IP           = 6,
+		SRVC_UNBAN_IP         = 7,
+		SRVC_ADMIN_MSG        = 8,
+		SRVC_SHUTDOWN         = 9,
+		SRVC_FORCE_SYNC       = 10,
 		SRVC_GET_COMPANY_LIST = 11,
 		SRVC_GET_COMPANY_INFO = 12,
 		SRVC_UNLOCK_COMPANY   = 13,

@@ -12,12 +12,14 @@
 #include "simtypes.h"
 #include "simworld.h"
 #include "simmenu.h"
-#include "simobj.h"
+#include "obj/simobj.h"
 
 #include "boden/wege/schiene.h"
 
 #include "dataobj/environment.h"
 #include "dataobj/translator.h"
+
+#include "display/viewport.h"
 
 #include "obj/baum.h"
 
@@ -732,8 +734,11 @@ class tool_step_year_t : public tool_t {
 public:
 	tool_step_year_t() : tool_t(TOOL_STEP_YEAR | SIMPLE_TOOL) {}
 	char const* get_tooltip(player_t const*) const OVERRIDE { return translator::translate("Step timeline one year"); }
-	bool init( player_t * ) OVERRIDE {
-		welt->step_year();
+	bool init( player_t *player ) OVERRIDE {
+		if(  !env_t::networkmode  ||  player->is_public_service()  ) {
+			// in networkmode only for public player
+			welt->step_year();
+		}
 		return false;
 	}
 };
@@ -909,7 +914,7 @@ public:
 	image_id get_icon(player_t *) const OVERRIDE { return baum_t::get_count() > 0 ? icon : IMG_EMPTY; }
 	bool init(player_t * ) OVERRIDE {
 		if(  baum_t::get_count() > 0  &&  default_param  ) {
-			baum_t::fill_trees( atoi(default_param) );
+			baum_t::fill_trees( atoi(default_param), 0, 0, welt->get_size().x, welt->get_size().y );
 		}
 		return false;
 	}
@@ -1013,7 +1018,37 @@ public:
 	bool is_work_network_safe() const OVERRIDE { return true; }
 };
 
+class tool_move_map_t : public tool_t {
+public:
+	tool_move_map_t() : tool_t(TOOL_MOVE_MAP | SIMPLE_TOOL) {}
+	char const* get_tooltip(player_t const*) const OVERRIDE { return translator::translate("Move the map"); }
+	bool is_selected() const OVERRIDE { return false; }
+	bool init( player_t * ) OVERRIDE {
+		assert(  default_param  );
+		if( const char *c = strchr( default_param, '|' ) ) {
+			koord delta( atoi( default_param ), atoi( c+1 ) );
+			welt->get_viewport()->change_world_position(welt->get_viewport()->get_world_position() + delta);
+			welt->set_dirty();
+		}
+		return false;
+	}
+	bool is_init_network_safe() const OVERRIDE { return true; }
+	bool is_work_network_safe() const OVERRIDE { return true; }
+};
+
+class tool_rollup_all_win_t : public tool_t {
+public:
+	tool_rollup_all_win_t() : tool_t(TOOL_ROLLUP_ALL_WIN | SIMPLE_TOOL) {}
+	char const* get_tooltip(player_t const*) const OVERRIDE { return translator::translate("Hide/open all windows"); }
+	bool is_selected() const OVERRIDE { return false; }
+	bool init( player_t * ) OVERRIDE;
+	bool is_init_network_safe() const OVERRIDE { return true; }
+	bool is_work_network_safe() const OVERRIDE { return true; }
+};
+
+
 /******************************** Internal tools ***********/
+
 /* internal simple tools needed for network synchronisation */
 class tool_traffic_level_t : public tool_t {
 public:

@@ -118,6 +118,8 @@ enum {
 	TOOL_TOGGLE_RESERVATION,
 	TOOL_VIEW_OWNER,
 	TOOL_HIDE_UNDER_CURSOR,
+	TOOL_MOVE_MAP,
+	TOOL_ROLLUP_ALL_WIN,
 	SIMPLE_TOOL_COUNT,
 	SIMPLE_TOOL = 0x2000
 };
@@ -210,11 +212,11 @@ public:
 	uint32 callback_id;
 
 	enum {
-		WFL_SHIFT  = 1, ///< shift-key was pressed when mouse-click happened
-		WFL_CTRL   = 2, ///< ctrl-key was pressed when mouse-click happened
-		WFL_LOCAL  = 4, ///< tool call was issued by local client
-		WFL_SCRIPT = 8, ///< tool call was issued by script
-		WFL_NO_CHK = 16, ///< tool call needs no password or scenario checks
+		WFL_SHIFT  = 1 << 0, ///< shift-key was pressed when mouse-click happened
+		WFL_CTRL   = 1 << 1, ///< ctrl-key was pressed when mouse-click happened
+		WFL_LOCAL  = 1 << 2, ///< tool call was issued by local client
+		WFL_SCRIPT = 1 << 3, ///< tool call was issued by script
+		WFL_NO_CHK = 1 << 4  ///< tool call needs no password or scenario checks
 	};
 	uint8 flags; // flags are set before init/work/move is called
 
@@ -225,6 +227,7 @@ public:
 	bool no_check()           const { return flags & WFL_NO_CHK; }
 	bool can_use_gui()        const { return is_local_execution()  &&  !is_scripted(); }
 
+	uint8  command_flags; // only shift and control
 	uint16 command_key;// key to toggle action for this function
 
 	static vector_tpl<tool_t *> general_tool;
@@ -274,13 +277,13 @@ public:
 
 	// when true, local execution would do no harm
 	virtual bool is_init_network_safe() const { return false; }
-	virtual bool is_move_network_save(player_t *) const { return true; }
+	virtual bool is_move_network_safe(player_t *) const { return true; }
 
 	// if is_work_network_safe()==false
-	// and is_work_here_network_save(...)==false
+	// and is_work_here_network_safe(...)==false
 	// then work-command is sent over network
 	virtual bool is_work_network_safe() const { return false; }
-	virtual bool is_work_here_network_save(player_t *, koord3d) { return false; }
+	virtual bool is_work_here_network_safe(player_t *, koord3d) { return false; }
 
 	// will draw a dark frame, if selected
 	virtual void draw_after(scr_coord pos, bool dirty) const;
@@ -369,7 +372,7 @@ public:
 	char const* move(player_t*, uint16 /* buttonstate */, koord3d) OVERRIDE;
 	bool move_has_effects() const OVERRIDE { return true; }
 
-	bool is_work_here_network_save(player_t *, koord3d) OVERRIDE;
+	bool is_work_here_network_safe(player_t *, koord3d) OVERRIDE;
 
 	/**
 	 * @returns true if cleanup() needs to be called before another tool can be executed

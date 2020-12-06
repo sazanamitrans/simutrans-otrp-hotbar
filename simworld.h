@@ -20,13 +20,16 @@
 #include "tpl/slist_tpl.h"
 
 #include "dataobj/settings.h"
-#include "network/pwd_hash.h"
 #include "dataobj/loadsave.h"
 #include "dataobj/rect.h"
 
-#include "simplan.h"
+#include "utils/checklist.h"
+#include "utils/sha1_hash.h"
 
+#include "simplan.h"
 #include "simdebug.h"
+
+
 
 struct sound_info;
 class stadt_t;
@@ -47,27 +50,6 @@ class goods_desc_t;
 class memory_rw_t;
 class viewport_t;
 class records_t;
-
-struct checklist_t
-{
-	uint32 random_seed;
-	uint16 halt_entry;
-	uint16 line_entry;
-	uint16 convoy_entry;
-
-	checklist_t() : random_seed(0), halt_entry(0), line_entry(0), convoy_entry(0) { }
-	checklist_t(uint32 _random_seed, uint16 _halt_entry, uint16 _line_entry, uint16 _convoy_entry)
-		: random_seed(_random_seed), halt_entry(_halt_entry), line_entry(_line_entry), convoy_entry(_convoy_entry) { }
-
-	bool operator == (const checklist_t &other) const
-	{
-		return ( random_seed==other.random_seed && halt_entry==other.halt_entry && line_entry==other.line_entry && convoy_entry==other.convoy_entry );
-	}
-	bool operator != (const checklist_t &other) const { return !( (*this)==other ); }
-
-	void rdwr(memory_rw_t *buffer);
-	int print(char *buffer, const char *entity) const;
-};
 
 
 /**
@@ -102,7 +84,7 @@ public:
 	void perlin_hoehe_loop(sint16, sint16, sint16, sint16);
 
 	enum player_cost {
-		WORLD_CITICENS=0,        ///< total people
+		WORLD_CITIZENS = 0,      ///< total people
 		WORLD_GROWTH,            ///< growth (just for convenience)
 		WORLD_TOWNS,             ///< number of all cities
 		WORLD_FACTORIES,         ///< number of all consuming only factories
@@ -120,13 +102,28 @@ public:
 	#define MAX_WORLD_HISTORY_YEARS   (12) // number of years to keep history
 	#define MAX_WORLD_HISTORY_MONTHS  (12) // number of months to keep history
 
-	enum { NORMAL=0, PAUSE_FLAG = 0x01, FAST_FORWARD=0x02, FIX_RATIO=0x04 };
+	enum {
+		NORMAL       = 0,
+		PAUSE_FLAG   = 1 << 0,
+		FAST_FORWARD = 1 << 1,
+		FIX_RATIO    = 1 << 2
+	};
 
 	/**
 	 * Missing things during loading:
 	 * factories, vehicles, roadsigns or catenary may be severe
 	 */
-	enum missing_level_t { NOT_MISSING=0, MISSING_FACTORY=1, MISSING_VEHICLE=2, MISSING_SIGN=3, MISSING_WAYOBJ=4, MISSING_ERROR=4, MISSING_BRIDGE, MISSING_BUILDING, MISSING_WAY };
+	enum missing_level_t {
+		NOT_MISSING     = 0,
+		MISSING_FACTORY = 1,
+		MISSING_VEHICLE = 2,
+		MISSING_SIGN    = 3,
+		MISSING_WAYOBJ  = 4,
+		MISSING_ERROR   = 4,
+		MISSING_BRIDGE,
+		MISSING_BUILDING,
+		MISSING_WAY
+	};
 
 private:
 	/**
@@ -689,7 +686,10 @@ private:
 	 */
 	uint32 server_last_announce_time;
 
-	enum { SYNCX_FLAG = 0x01, GRIDS_FLAG = 0x02 };
+	enum {
+		SYNCX_FLAG = 1 << 0,
+		GRIDS_FLAG = 1 << 1
+	};
 
 	void world_xy_loop(xy_loop_func func, uint8 flags);
 	static void *world_xy_loop_thread(void *);
@@ -904,7 +904,13 @@ public:
 	 */
 	void call_change_player_tool(uint8 cmd, uint8 player_nr, uint16 param, bool scripted_call=false);
 
-	enum change_player_tool_cmds { new_player=1, toggle_freeplay=2, delete_player=3, toggle_player_active=4 };
+	enum change_player_tool_cmds {
+		new_player           = 1,
+		toggle_freeplay      = 2,
+		delete_player        = 3,
+		toggle_player_active = 4
+	};
+
 	/**
 	 * @param exec If false checks whether execution is allowed, if true executes tool.
 	 * @returns Whether execution is allowed.
@@ -1643,9 +1649,14 @@ public:
 	void calc_humidity_map_region( sint16 xtop, sint16 ytop, sint16 xbottom, sint16 ybottom );
 
 	/**
-	* assign climated from the climate map to a region
-	*/
+	 * assign climated from the climate map to a region
+	 */
 	void assign_climate_map_region( sint16 xtop, sint16 ytop, sint16 xbottom, sint16 ybottom );
+
+	/**
+	 * Since the trees follow humidity, we have to redistribute them only in the new region
+	 */
+	void distribute_trees_region( sint16 xtop, sint16 ytop, sint16 xbottom, sint16 ybottom );
 
 	/**
 	 * Rotates climate and water transitions for a tile

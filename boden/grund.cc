@@ -48,7 +48,7 @@
 
 #include "../utils/cbuffer_t.h"
 
-#include "../vehicle/simpeople.h"
+#include "../vehicle/pedestrian.h"
 
 #include "wege/kanal.h"
 #include "wege/maglev.h"
@@ -128,31 +128,25 @@ const char *grund_t::get_text() const
 }
 
 
-FLAGGED_PIXVAL grund_t::text_farbe() const
+const player_t* grund_t::get_label_owner() const
 {
+	const player_t* player = NULL;
 	// if this ground belongs to a halt, the color should reflect the halt owner, not the ground owner!
 	// Now, we use the color of label_t owner
 	if(is_halt()  &&  find<label_t>()==NULL) {
 		// only halt label
 		const halthandle_t halt = get_halt();
-		const player_t *player=halt->get_owner();
-		if(player) {
-			return PLAYER_FLAG|color_idx_to_rgb(player->get_player_color1()+4);
-		}
+		player=halt->get_owner();
 	}
 	// else color according to current owner
 	else if(obj_bei(0)) {
-		const player_t *player = obj_bei(0)->get_owner(); // for cityhall
+		player = obj_bei(0)->get_owner(); // for cityhall
 		const label_t* l = find<label_t>();
 		if(l) {
 			player = l->get_owner();
 		}
-		if(player) {
-			return PLAYER_FLAG|color_idx_to_rgb(player->get_player_color1()+4);
-		}
 	}
-
-	return SYSCOL_TEXT_HIGHLIGHT;
+	return player;
 }
 
 
@@ -273,7 +267,7 @@ void grund_t::rdwr(loadsave_t *file)
 	// restore grid
 	if(  file->is_loading()  ) {
 		if( get_typ() == grund_t::boden  ||  get_typ() == grund_t::fundament  ) {
-			/* since those must be on the ground and broken grids occurred in the past 
+			/* since those must be on the ground and broken grids occurred in the past
 			 * (due to incorrect restoration of grid heights on house slopes)
 			 * we simply reset the grid height to our current height
 			 */
@@ -448,6 +442,10 @@ void grund_t::rdwr(loadsave_t *file)
 	// need to add a crossing for old games ...
 	if (file->is_loading()  &&  ist_uebergang()  &&  !find<crossing_t>(2)) {
 		const crossing_desc_t *cr_desc = crossing_logic_t::get_crossing( ((weg_t *)obj_bei(0))->get_waytype(), ((weg_t *)obj_bei(1))->get_waytype(), ((weg_t *)obj_bei(0))->get_max_speed(), ((weg_t *)obj_bei(1))->get_max_speed(), 0 );
+		if(cr_desc==NULL) {
+			dbg->warning("crossing_t::rdwr()","requested for waytypes %i and %i not available, try to load object without timeline", ((weg_t *)obj_bei(0))->get_waytype(), ((weg_t *)obj_bei(1))->get_waytype() );
+			cr_desc = crossing_logic_t::get_crossing( ((weg_t *)obj_bei(0))->get_waytype(), ((weg_t *)obj_bei(1))->get_waytype(), 0, 0, 0);
+		}
 		if(cr_desc==0) {
 			dbg->fatal("crossing_t::crossing_t()","requested for waytypes %i and %i but nothing defined!", ((weg_t *)obj_bei(0))->get_waytype(), ((weg_t *)obj_bei(1))->get_waytype() );
 		}
@@ -792,7 +790,7 @@ void grund_t::calc_back_image(const sint8 hgt, const slope_t::type slope_this)
 
 	for(  size_t i=0;  i<grund_t::BACK_WALL_COUNT;  i++  ) {
 		// now enter the left/back two height differences
-		if(  const grund_t *gr=welt->lookup_kartenboden(k + koord::nsew[(i-1)&3])  ) {
+		if(  const grund_t *gr=welt->lookup_kartenboden(k + koord::nesw[(i+3)&3])  ) {
 			const uint8 back_height = min(corner_nw(slope_this),(i==0?corner_sw(slope_this):corner_ne(slope_this)));
 
 			const sint16 left_hgt=gr->get_disp_height()-back_height;
@@ -840,8 +838,8 @@ void grund_t::calc_back_image(const sint8 hgt, const slope_t::type slope_this)
 					// ok, we need a fence here, if there is not a vertical bridgehead
 					weg_t const* w;
 					fence[i] = !(w = get_weg_nr(0)) || (
-						!(w->get_ribi_unmasked() & ribi_t::nsew[(i-1)&3]) &&
-						(!(w = get_weg_nr(1)) || !(w->get_ribi_unmasked() & ribi_t::nsew[(i-1)&3]))
+						!(w->get_ribi_unmasked() & ribi_t::nesw[(i+3)&3]) &&
+						(!(w = get_weg_nr(1)) || !(w->get_ribi_unmasked() & ribi_t::nesw[(i+3)&3]))
 					);
 
 					// no fences between water tiles or between invisible tiles
@@ -974,7 +972,7 @@ void grund_t::display_boden(const sint16 xpos, const sint16 ypos, const sint16 r
 				sint16 yoff = tile_raster_scale_y( -TILE_HEIGHT_STEP*back_height, raster_tile_width );
 				if(  back_image[i]  ) {
 					// Draw extra wall images for walls that cannot be represented by a image.
-					grund_t *gr = welt->lookup_kartenboden( k + koord::nsew[(i-1)&3] );
+					grund_t *gr = welt->lookup_kartenboden( k + koord::nesw[(i+3)&3] );
 					if(  gr  ) {
 						// for left we test corners 2 and 3 (east), for back we use 1 and 2 (south)
 						const slope_t::type gr_slope = gr->get_disp_slope();
@@ -1657,6 +1655,26 @@ void grund_t::display_obj_fg(const sint16 xpos, const sint16 ypos, const bool is
 }
 
 
+// display text label in player colors using different styles set by env_t::show_names
+void display_text_label(sint16 xpos, sint16 ypos, const char* text, const player_t *player, bool dirty)
+{
+	sint16 pc = player ? player->get_player_color1()+4 : SYSCOL_TEXT_HIGHLIGHT;
+	switch( env_t::show_names >> 2 ) {
+		case 0:
+			display_ddd_proportional_clip( xpos, ypos, proportional_string_width(text)+7, 0, color_idx_to_rgb(pc), color_idx_to_rgb(COL_BLACK), text, dirty );
+			break;
+		case 1:
+			display_outline_proportional_rgb( xpos, ypos-(LINESPACE/2), color_idx_to_rgb(pc+3), color_idx_to_rgb(COL_BLACK), text, dirty );
+			break;
+		case 2:
+			display_outline_proportional_rgb( xpos + LINESPACE + D_H_SPACE, ypos-(LINESPACE/2),   color_idx_to_rgb(COL_YELLOW), color_idx_to_rgb(COL_BLACK), text, dirty );
+			display_ddd_box_clip_rgb(         xpos,                         ypos-(LINESPACE/2),   LINESPACE,   LINESPACE,   color_idx_to_rgb(pc-2), PLAYER_FLAG|color_idx_to_rgb(pc+2) );
+			display_fillbox_wh_rgb(           xpos+1,                       ypos-(LINESPACE/2)+1, LINESPACE-2, LINESPACE-2, color_idx_to_rgb(pc), dirty );
+			break;
+	}
+}
+
+
 void grund_t::display_overlay(const sint16 xpos, const sint16 ypos)
 {
 	const bool dirty = get_flag(grund_t::dirty);
@@ -1670,21 +1688,10 @@ void grund_t::display_overlay(const sint16 xpos, const sint16 ypos)
 			const sint16 raster_tile_width = get_tile_raster_width();
 			const int width = proportional_string_width(text)+7;
 			int new_xpos = xpos - (width-raster_tile_width)/2;
-			FLAGGED_PIXVAL pc = text_farbe();
 
-			switch( env_t::show_names >> 2 ) {
-				case 0:
-					display_ddd_proportional_clip( new_xpos, ypos, width, 0, pc, color_idx_to_rgb(COL_BLACK), text, dirty );
-					break;
-				case 1:
-					display_outline_proportional_rgb( new_xpos, ypos-(LINESPACE/2), pc+3, color_idx_to_rgb(COL_BLACK), text, dirty );
-					break;
-				case 2:
-					display_outline_proportional_rgb( new_xpos + LINESPACE + D_H_SPACE, ypos-(LINESPACE/2), color_idx_to_rgb(COL_YELLOW), color_idx_to_rgb(COL_BLACK), text, dirty );
-					display_ddd_box_clip_rgb( new_xpos, ypos-(LINESPACE/2), LINESPACE, LINESPACE, pc-2, pc+2 );
-					display_fillbox_wh_rgb( new_xpos+1, ypos-(LINESPACE/2)+1, LINESPACE-2, LINESPACE-2, pc, dirty );
-					break;
-			}
+			const player_t* owner = get_label_owner();
+
+			display_text_label(new_xpos, ypos, text, owner, dirty);
 		}
 
 		// display station waiting information/status
@@ -1737,13 +1744,13 @@ bool grund_t::weg_erweitern(waytype_t wegtyp, ribi_t::ribi ribi)
 				// ribi isn't set at wayobj;
 				for( uint8 i = 0; i < 4; i++ ) {
 					// Add ribis to adjacent wayobj.
-					if( ribi_t::nsew[i] & ribi ) {
+					if( ribi_t::nesw[i] & ribi ) {
 						grund_t *next_gr;
-						if( get_neighbour( next_gr, wegtyp, ribi_t::nsew[i] ) ) {
+						if( get_neighbour( next_gr, wegtyp, ribi_t::nesw[i] ) ) {
 							wayobj_t *wo2 = next_gr->get_wayobj( wegtyp );
 							if( wo2 ) {
-								wo->set_dir( wo->get_dir() | ribi_t::nsew[i] );
-								wo2->set_dir( wo2->get_dir() | ribi_t::backward(ribi_t::nsew[i]) );
+								wo->set_dir( wo->get_dir() | ribi_t::nesw[i] );
+								wo2->set_dir( wo2->get_dir() | ribi_t::backward(ribi_t::nesw[i]) );
 							}
 						}
 					}
@@ -1850,10 +1857,10 @@ sint32 grund_t::weg_entfernen(waytype_t wegtyp, bool ribi_rem)
 			grund_t *to;
 
 			for(int r = 0; r < 4; r++) {
-				if((ribi & ribi_t::nsew[r]) && get_neighbour(to, wegtyp, ribi_t::nsew[r])) {
+				if((ribi & ribi_t::nesw[r]) && get_neighbour(to, wegtyp, ribi_t::nesw[r])) {
 					weg_t *weg2 = to->get_weg(wegtyp);
 					if(weg2) {
-						weg2->ribi_rem(ribi_t::backward(ribi_t::nsew[r]));
+						weg2->ribi_rem(ribi_t::backward(ribi_t::nesw[r]));
 						to->calc_image();
 					}
 				}

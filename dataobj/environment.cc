@@ -10,6 +10,7 @@
 #include "../simversion.h"
 #include "../simconst.h"
 #include "../simtypes.h"
+#include "../sys/simsys.h"
 #include "../simmesg.h"
 
 #include "../utils/simrandom.h"
@@ -17,7 +18,7 @@ void rdwr_win_settings(loadsave_t *file); // simwin
 
 sint8 env_t::pak_tile_height_step = 16;
 sint8 env_t::pak_height_conversion_factor = 1;
-bool env_t::new_height_map_conversion = false;
+env_t::height_conversion_mode env_t::height_conv_mode = env_t::HEIGHT_CONV_LINEAR;
 
 bool env_t::simple_drawing = false;
 bool env_t::simple_drawing_fast_forward = true;
@@ -25,7 +26,7 @@ sint16 env_t::simple_drawing_normal = 4;
 sint16 env_t::simple_drawing_default = 24;
 uint8 env_t::follow_convoi_underground = 2;
 
-char env_t::program_dir[PATH_MAX];
+char env_t::data_dir[PATH_MAX];
 plainstring env_t::default_theme;
 const char *env_t::user_dir = 0;
 const char *env_t::savegame_version_str = SAVEGAME_VER_NR;
@@ -79,6 +80,8 @@ scr_size env_t::iconsize( 32, 32 );
 uint8 env_t::chat_window_transparency = 75;
 bool env_t::hide_rail_return_ticket = true;
 bool env_t::show_delete_buttons = false;
+
+bool env_t::numpad_always_moves_map = true;
 
 // only used internally => do not touch further
 bool env_t::quit_simutrans = false;
@@ -238,7 +241,7 @@ void env_t::init()
 	max_acceleration=50;
 
 #ifdef MULTI_THREAD
-	num_threads = 4;
+	num_threads = dr_get_max_threads();
 #else
 	num_threads = 1;
 #endif
@@ -478,8 +481,20 @@ void env_t::rdwr(loadsave_t *file)
 		file->rdwr_str( default_theme );
 	}
 	if(  file->is_version_atleast(120, 2)  ) {
-		file->rdwr_bool( new_height_map_conversion );
+		if(  file->is_version_atleast(122, 1)) {
+			sint32 conv_mode = height_conv_mode;
+			file->rdwr_long( conv_mode );
+			if (file->is_loading()) {
+				height_conv_mode = (env_t::height_conversion_mode)::clamp(conv_mode, 0, (int)env_t::NUM_HEIGHT_CONV_MODES-1);
+			}
+		}
+		else {
+			bool new_convert = height_conv_mode != env_t::HEIGHT_CONV_LEGACY_SMALL;
+			file->rdwr_bool( new_convert );
+			height_conv_mode = new_convert ? env_t::HEIGHT_CONV_LEGACY_LARGE : env_t::HEIGHT_CONV_LEGACY_SMALL;
+		}
 	}
+
 	if(  file->is_version_atleast(120, 5)  ) {
 		file->rdwr_long( background_color_rgb );
 		file->rdwr_long( tooltip_color_rgb );
@@ -497,7 +512,7 @@ void env_t::rdwr(loadsave_t *file)
 		}
 		file->rdwr_byte( fontsize );
 	}
-	if(  file->is_version_atleast(102, 7)  ) {
+	if(  file->is_version_atleast(120, 7)  ) {
 		file->rdwr_byte(show_money_message);
 	}
 
@@ -514,7 +529,9 @@ void env_t::rdwr(loadsave_t *file)
 		file->rdwr_byte( gui_player_color_dark );
 		file->rdwr_byte( gui_player_color_bright );
 	}
-
+	if( file->is_version_atleast( 122, 1 ) ) {
+		file->rdwr_bool( env_t::numpad_always_moves_map );
+	}
 	// server settings are not saved, since they are server specific
 	// and could be different on different servers on the same computers
 }

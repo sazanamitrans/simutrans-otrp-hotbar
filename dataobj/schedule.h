@@ -48,7 +48,15 @@ protected:
 
 public:
 	enum schedule_type {
-		schedule = 0, truck_schedule = 1, train_schedule = 2, ship_schedule = 3, airplane_schedule = 4, monorail_schedule = 5, tram_schedule = 6, maglev_schedule = 7, narrowgauge_schedule = 8,
+		schedule             = 0,
+		truck_schedule       = 1,
+		train_schedule       = 2,
+		ship_schedule        = 3,
+		airplane_schedule    = 4,
+		monorail_schedule    = 5,
+		tram_schedule        = 6,
+		maglev_schedule      = 7,
+		narrowgauge_schedule = 8
 	};
 
 	minivec_tpl<schedule_entry_t> entries;
@@ -71,6 +79,15 @@ public:
 	virtual schedule_type get_type() const = 0;
 
 	virtual waytype_t get_waytype() const = 0;
+
+	// remove this entry
+	void remove_entry( uint8 entry );
+
+	// move the entry to front (and wrap)
+	void move_entry_forward( uint8 entry );
+
+	// move the entry to back (and wrap)
+	void move_entry_backward( uint8 entry );
 
 	/**
 	 * Get current stop of the schedule.
@@ -148,9 +165,10 @@ public:
 
 	/**
 	 * Calculates a return way for this schedule.
-	 * Will add elements 1 to end in reverse order to schedule.
+	 * Will add elements 1 to end in reverse order to schedule if ture
+	 * Or just mirror order if false
 	 */
-	void add_return_way();
+	void add_return_way(bool);
 
 	virtual schedule_t* copy() = 0;//{ return new schedule_t(this); }
 

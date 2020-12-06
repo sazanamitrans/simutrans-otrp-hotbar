@@ -199,9 +199,76 @@ bool schedule_t::remove()
 
 
 
+void schedule_t::remove_entry( uint8 delete_enty )
+{
+	if( current_stop > delete_enty ) {
+		current_stop--;
+	}
+	bool ok = entries.remove_at(delete_enty);
+	make_current_stop_valid();
+}
+
+
+
+void schedule_t::move_entry_forward( uint8 cur )
+{
+	if( entries.get_count() <= 2 ) {
+		return;
+	}
+	// so we have something to do
+	uint8 new_cur = (cur + entries.get_count() - 1) % entries.get_count();
+	schedule_entry_t cur_entry = entries[ cur ];
+	entries.remove_at( cur );
+	if ( cur==0 ) {
+		current_stop = (current_stop + entries.get_count() - 1) % entries.get_count();
+		entries.append( cur_entry );
+	}
+	else {
+		if( current_stop == cur ) {
+			current_stop = new_cur;
+		}
+		else if( current_stop == new_cur ) {
+			current_stop++;
+		}
+		entries.insert_at( new_cur, cur_entry );
+	}
+	make_current_stop_valid();
+}
+
+
+
+void schedule_t::move_entry_backward( uint8 cur )
+{
+	if( entries.get_count() <= 2 ) {
+		return;
+	}
+	// so we have something to do
+	uint8 new_cur = (cur + 1) % entries.get_count();
+	schedule_entry_t cur_entry = entries[ cur ];
+	entries.remove_at( cur );
+	if ( new_cur==0 ) {
+		entries.insert_at( 0, cur_entry );
+		current_stop = (current_stop + 1) % entries.get_count();
+	}
+	else {
+		if( current_stop == cur ) {
+			current_stop = new_cur;
+		}
+		else if( current_stop == new_cur ) {
+			current_stop --;
+		}
+		entries.insert_at( new_cur, cur_entry );
+	}
+	make_current_stop_valid();
+}
+
+
+
 void schedule_t::rdwr(loadsave_t *file)
 {
 	xml_tag_t f( file, "fahrplan_t" );
+
+	assert(!file->is_loading() || entries.empty());
 
 	make_current_stop_valid();
 
@@ -385,11 +452,24 @@ bool schedule_t::similar( const schedule_t *schedule, const player_t *player )
 
 
 
-void schedule_t::add_return_way()
+void schedule_t::add_return_way(bool append_mirror)
 {
-	if(  entries.get_count()<127  &&  entries.get_count()>1  ) {
-		for(  uint8 maxi=entries.get_count()-2;  maxi>0;  maxi--  ) {
-			entries.append(entries[maxi]);
+	if(  append_mirror  ) {
+		// add mirror entries
+		if(  entries.get_count()<127  &&  entries.get_count()>1  ) {
+			for(  uint8 maxi=entries.get_count()-2;  maxi>0;  maxi--  ) {
+				entries.append(entries[maxi]);
+			}
+		}
+	}
+	else {
+		// invert
+		if(  entries.get_count()>1  ) {
+			for(  uint8 i=0;  i<(entries.get_count()-1)/2;  i++  ) {
+				schedule_entry_t temp = entries[i];
+				entries[i] = entries[entries.get_count()-i-1];
+				entries[ entries.get_count()-i-1] = temp;
+			}
 		}
 	}
 }
