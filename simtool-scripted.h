@@ -35,12 +35,16 @@ struct scripted_tool_info_t {
 	const skin_desc_t* desc; ///< skin object used for cursor (0), icon (1), and maybe marker (2)
 	bool restart;            ///< true, if script vm has to be restarted after work()
 	bool is_one_click;       ///< true, if tool is one-click (otherwise needs two clicks/coordinates to work)
+	koord cursor_area;       ///< size of cursor defined in tool_t
+	koord cursor_offset;     ///< cursor offset defined in tool_t
 	/// sets default values
 	scripted_tool_info_t()
 	{
 		desc = NULL;
 		restart = true;
 		is_one_click = true;
+		cursor_area = koord(1,1);
+		cursor_offset = koord(0,0);
 	}
 };
 
@@ -51,8 +55,6 @@ private:
 
 	void load_script(const char* path, player_t* player);
 protected:
-
-	void init_images(tool_t *tool) const;
 	/// the vm, will be initialized in init()
 	script_vm_t *script;
 	/// starts vm, sets our_player, returns true if successful
@@ -71,12 +73,16 @@ public:
 	void set_info(const scripted_tool_info_t *i);
 	const scripted_tool_info_t* get_info() const { return info; };
 
+	void init_images(tool_t *tool) const;
+
 	const char* get_menu_arg() const { return info ? info->menu_arg.c_str() : ""; }
 
 	/// has to be called if the tool is active, to resume script if a work-command gets suspended
 	void step(player_t* player);
 
 	const char *get_tooltip(const player_t *) const { return info ? info->tooltip.c_str() : ""; }
+	koord get_cursor_area() const { return info->cursor_area; }
+	koord get_cursor_offset() const { return info->cursor_offset; }
 };
 
 
