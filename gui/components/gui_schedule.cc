@@ -46,8 +46,6 @@ static karte_ptr_t welt;
 /* obsolete tooltips and texts
 const char *gui_schedule_t::bt_mode_text[MAX_MODE] =
 {
-	"Add Stop",
-	"Ins Stop",
 	"Del Stop"
 };
 
@@ -107,7 +105,9 @@ public:
 			add_component(&down);
 		}
 
-		del.init( button_t::square_automatic, "" );
+		del.init( button_t::imagebox, NULL );
+		del.set_image( skinverwaltung_t::gadget->get_image_id(SKIN_GADGET_CLOSE) );
+		del.set_size( gui_theme_t::gui_arrow_left_size );
 		del.add_listener( this );
 		del.set_tooltip( "Delete the current stop" );
 		add_component( &del );
@@ -176,21 +176,20 @@ public:
 
 	bool infowin_event(const event_t *ev) OVERRIDE
 	{
-		if( ev->ev_class == EVENT_RELEASE ) {
-			if(  IS_RIGHTRELEASE(ev)  ) {
-				// just center on it
-				welt->get_viewport()->change_world_position( entry.pos );
-			}
-			else {
-				set_focus( this );
-				if( !gui_aligned_container_t::infowin_event( ev ) && stop.getroffen( ev->cx, ev->cy ) ) {
-					// not handled, so we make i aktive
-					call_listeners( number );
-				}
+		if(  IS_RIGHTRELEASE(ev)  ) {
+			// just center on it
+			welt->get_viewport()->change_world_position( entry.pos );
+			return true;
+		}
+		else if(ev->button_state==1  ){
+			set_focus( this );
+			if( !gui_aligned_container_t::infowin_event( ev ) && stop.getroffen( ev->cx, ev->cy ) ) {
+				// not handled, so we make i aktive
+				call_listeners( number );
 			}
 			return true;
 		}
-		return false;
+		return gui_aligned_container_t::infowin_event(ev);
 	}
 };
 
@@ -311,6 +310,8 @@ public:
 				last_schedule = schedule->copy();
 			}
 			set_size(get_min_size());
+
+			call_listeners( schedule->get_current_stop() );
 		}
 		if (highlight) {
 			highlight_schedule(true);
@@ -384,7 +385,7 @@ gui_schedule_t::gui_schedule_t() :
 	set_table_layout(1,0);
 
 	// loading level and waiting time
-	loading_details = add_table( 3, 1 );
+	loading_details = add_table( 4, 1 );
 	loading_details->set_margin( scr_size(D_MARGIN_LEFT,0), scr_size(D_MARGIN_RIGHT,0) );
 	{
 		add_component(&lb_wait);
@@ -396,6 +397,8 @@ gui_schedule_t::gui_schedule_t() :
 		numimp_load.add_listener(this);
 		add_component(&numimp_load);
 
+		add_component(&lb_departure_time);
+
 		departure.set_rigid(true);
 		departure.add_listener(this);
 		add_component(&departure);
@@ -405,6 +408,12 @@ gui_schedule_t::gui_schedule_t() :
 	// action button row
 	add_table( 3, 1 )->set_margin( scr_size(D_MARGIN_LEFT,0), scr_size(D_MARGIN_RIGHT,0) );
 	{
+		insert_mode.new_component<gui_scrolled_list_t::const_text_scrollitem_t>(translator::translate("Ins Stop"), SYSCOL_TEXT);
+		insert_mode.new_component<gui_scrolled_list_t::const_text_scrollitem_t>(translator::translate("Add Stop"), SYSCOL_TEXT);
+		insert_mode.set_selection( 1 );
+		insert_mode.add_listener(this);
+		add_component(&insert_mode);
+
 		bt_revert.init(button_t::roundbox | button_t::flexible, "Revert schedule");
 		bt_revert.set_tooltip("Revert to original schedule");
 		bt_revert.add_listener(this);
@@ -415,8 +424,6 @@ gui_schedule_t::gui_schedule_t() :
 		bt_return.init(button_t::roundbox | button_t::flexible, "Revert schedule");
 		bt_return.add_listener(this);
 		add_component(&bt_return);
-
-		new_component<gui_fill_t>();
 	}
 	end_table();
 
@@ -443,7 +450,6 @@ gui_schedule_t::~gui_schedule_t()
 void gui_schedule_t::init(schedule_t* schedule_, player_t* player, convoihandle_t cnv, linehandle_t lin)
 {
 	if( old_schedule != schedule_ ) {
-
 		if( old_schedule ) {
 			stats->highlight_schedule( false );
 			update_tool( false );
@@ -452,14 +458,13 @@ void gui_schedule_t::init(schedule_t* schedule_, player_t* player, convoihandle_
 		}
 
 		// initialization
-		this->old_schedule = schedule_;
 		this->convoi_mode = cnv;
 		this->line_mode = lin;
 		this->player = player;
 		current_schedule_rotation = welt->get_settings().get_rotation();
 
 		// prepare editing
-		schedule = old_schedule->copy();
+		schedule = schedule_->copy();
 
 		make_return = (schedule->get_waytype() == road_wt || schedule->get_waytype() == air_wt || schedule->get_waytype() == water_wt);
 		if(  make_return  ) {
@@ -483,6 +488,12 @@ void gui_schedule_t::init(schedule_t* schedule_, player_t* player, convoihandle_
 		bt_return.enable( !no_editing );
 
 		update_selection();
+
+		this->old_schedule = schedule_;
+	}
+	else {
+		schedule->set_current_stop(schedule_->get_current_stop());
+		update_selection();
 	}
 	set_size(gui_aligned_container_t::get_min_size());
 }
@@ -491,8 +502,9 @@ void gui_schedule_t::init(schedule_t* schedule_, player_t* player, convoihandle_
 void gui_schedule_t::update_tool(bool set)
 {
 	if (set) {
-		tool_t::general_tool[TOOL_SCHEDULE_ADD]->set_default_param((const char *)schedule);
-		welt->set_tool( tool_t::general_tool[TOOL_SCHEDULE_ADD], player );
+		uint16 toolnr = insert_mode.get_selection() == 0 ? TOOL_SCHEDULE_INS : TOOL_SCHEDULE_ADD;
+		tool_t::general_tool[toolnr]->set_default_param((const char *)schedule);
+		welt->set_tool(tool_t::general_tool[toolnr], player );
 	}
 	else {
 		// we have to reset the tool (in particular, when window closes)
@@ -512,37 +524,32 @@ void gui_schedule_t::update_tool(bool set)
 
 void gui_schedule_t::update_selection()
 {
-	lb_wait.set_color( SYSCOL_BUTTON_TEXT_DISABLED );
+	// set all elements invisible first
+	lb_wait.set_visible(false);
+	numimp_load.set_visible(false);
+	departure.set_visible(false);
+	lb_departure_time.set_visible(false);
 
 	if(  !schedule->empty()  ) {
 		schedule->set_current_stop( min(schedule->get_count()-1,schedule->get_current_stop()) );
 
-		loading_details->remove_all();
-		loading_details->remove_component( &bt_add_scheduling );
-		loading_details->remove_component( &departure );
-		loading_details->remove_component( &numimp_load );
 		const uint8 current_stop = schedule->get_current_stop();
 
 		if(  haltestelle_t::get_halt(schedule->entries[current_stop].pos, player).is_bound()  ) {
 
-			loading_details->add_component( &lb_wait );
-			if( schedule->entries[ current_stop ].is_absolute_departure() ) {
-				loading_details->add_component( &departure );
-				loading_details->remove_component( &bt_add_scheduling );
-			}
-			else {
-				loading_details->add_component( &numimp_load );
-				numimp_load.set_value( schedule->entries[ current_stop ].minimum_loading );
-				loading_details->add_component( &departure );
-			}
+			lb_wait.set_visible(true);
+			lb_departure_time.set_visible(true);
+			lb_departure_time.set_text(schedule->entries[current_stop].minimum_loading > 0 ? "Depart after" : "Depart at");
+			numimp_load.set_visible(true);
+			numimp_load.set_value( schedule->entries[ current_stop ].minimum_loading );
+			departure.set_visible(true);
 			departure.set_ticks( schedule->entries[ current_stop ].waiting_time );
-			loading_details->set_size( loading_details->get_size() );
 		}
 		else {
 			// waypoint
-			loading_details->new_component<gui_empty_t>( &numimp_load );
 		}
 	}
+	loading_details->set_size( loading_details->get_min_size() );
 }
 
 
@@ -559,7 +566,6 @@ bool gui_schedule_t::action_triggered( gui_action_creator_t *comp, value_t p)
 		stats->schedule = schedule;
 		stats->update_schedule(true);
 		update_selection();
-		update_tool(true);
 		value_t v;
 		v.p = NULL;
 		call_listeners(v);
@@ -588,6 +594,10 @@ bool gui_schedule_t::action_triggered( gui_action_creator_t *comp, value_t p)
 			update_selection();
 		}
 	}
+	// do not reset tool during initialisation
+	if (old_schedule) {
+		update_tool(true);
+	}
 	return true;
 }
 
@@ -599,7 +609,7 @@ void gui_schedule_t::draw(scr_coord pos)
 		const uint8 world_rotation = world()->get_settings().get_rotation();
 		while(  current_schedule_rotation != world_rotation  ) {
 			current_schedule_rotation = (current_schedule_rotation + 1) % 4;
-			schedule->rotate90( (4+current_schedule_rotation - world_rotation) & 1 ? world()->get_size().x : world()->get_size().y );
+			schedule->rotate90( (4+current_schedule_rotation - world_rotation) & 1 ? world()->get_size().x-1 : world()->get_size().y-1 );
 		}
 
 		schedule_t *scd = get_old_schedule();
@@ -628,7 +638,6 @@ void gui_schedule_t::draw(scr_coord pos)
 
 		departure_or_load.enable( is_allowed );
 		numimp_load.enable( is_allowed );
-		bt_add_scheduling.enable( is_allowed );
 		departure.enable( is_allowed );
 		bt_return.enable( is_allowed );
 	}

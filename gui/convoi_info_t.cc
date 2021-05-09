@@ -124,6 +124,12 @@ void convoi_info_t::init(convoihandle_t cnv)
 			add_component(&target_label);
 			add_component(&route_bar);
 			end_table();
+			add_table(2,1);
+			line_button2.init( button_t::arrowright, NULL );
+			line_button2.add_listener( this );
+			add_component( &line_button2 );
+			add_component( &line_label );
+			end_table();
 		}
 		end_table();
 
@@ -261,7 +267,7 @@ convoi_info_t::~convoi_info_t()
 // apply new schedule
 void convoi_info_t::apply_schedule()
 {
-	if(  (!cnv.is_bound())  ||  cnv->get_state()!=convoi_t::EDIT_SCHEDULE  ) {
+	if(  (!cnv.is_bound())  ||  (cnv->get_state()!=convoi_t::EDIT_SCHEDULE  &&  cnv->get_state()!=convoi_t::INITIAL)  ) {
 		// no change allowed (one can only enter this state when editing was allowed)
 		return;
 	}
@@ -310,39 +316,36 @@ void convoi_info_t::init_line_selector()
 
 		cnv->get_owner()->simlinemgmt.get_lines(cnv->get_schedule()->get_type(), &lines);
 
-		// keep assignment with identical schedules
-		if (line.is_bound() && !cnv->get_schedule()->matches(world(), line->get_schedule())) {
-			if (old_line.is_bound() && cnv->get_schedule()->matches(world(), old_line->get_schedule())) {
-				line = old_line;
-			}
-			else {
-				line = linehandle_t();
+		bool new_bound = false;
+		FOR(vector_tpl<linehandle_t>, other_line, lines) {
+			if( scd.get_schedule()->matches( world(), other_line->get_schedule() ) ) {
+				if(  line != other_line  ) {
+					line = other_line;
+					reset_min_windowsize();
+					scd.init( scd.get_schedule(), cnv->get_owner(), cnv, line );
+				}
+				new_bound = true;
+				break;
 			}
 		}
-		int offset = 0;
+		if(  !new_bound  &&  line.is_bound()  ) {
+			// remove linehandle from schedule
+			line = linehandle_t();
+			scd.init( scd.get_schedule(), cnv->get_owner(), cnv, line );
+		}
+
+		int offset = 2;
 		if (!line.is_bound()) {
 			selection = 0;
-			offset = 2;
+			offset = 3;
 			line_selector.new_component<gui_scrolled_list_t::const_text_scrollitem_t>(translator::translate("<individual schedule>"), SYSCOL_TEXT);
-			if(  !scd.get_schedule()->empty()  ) {
-				line_selector.new_component<gui_scrolled_list_t::const_text_scrollitem_t>(translator::translate("<promote to line>"), SYSCOL_TEXT);
-			}
-			else {
-				line_selector.new_component<gui_scrolled_list_t::const_text_scrollitem_t>("--------------------------------", SYSCOL_TEXT);
-			}
+			line_selector.new_component<gui_scrolled_list_t::const_text_scrollitem_t>(translator::translate("<promote to line>"), SYSCOL_TEXT);
+			line_selector.new_component<gui_scrolled_list_t::const_text_scrollitem_t>("--------------------------------", SYSCOL_TEXT);
 		}
 
 		FOR(vector_tpl<linehandle_t>, other_line, lines) {
 			line_selector.new_component<line_scrollitem_t>(other_line);
-			if (!line.is_bound()) {
-				if (cnv->get_schedule()->matches(world(), other_line->get_schedule())  ) {
-					selection = line_selector.count_elements() - 1;
-					line = other_line;
-					scd.init( cnv->get_schedule(), cnv->get_owner(), cnv, line );
-					reset_min_windowsize();
-				}
-			}
-			else if (line == other_line) {
+			if (line == other_line) {
 				selection = line_selector.count_elements() - 1;
 			}
 		}
@@ -351,6 +354,7 @@ void convoi_info_t::init_line_selector()
 		line_scrollitem_t::sort_mode = line_scrollitem_t::SORT_BY_NAME;
 		line_selector.sort(offset);
 		old_line_count = cnv->get_owner()->simlinemgmt.get_line_count();
+		old_schedule_count = scd.get_schedule()->get_count();
 	}
 }
 
@@ -407,6 +411,10 @@ void convoi_info_t::update_labels()
 		line_label.buf().append(cnv->get_line()->get_name());
 		line_label.set_color(cnv->get_line()->get_state_color());
 	}
+	else {
+		line_label.buf().clear();
+	}
+	line_button2.set_visible( cnv->get_line().is_bound() );
 	line_label.update();
 
 	// buffer update now only when needed by convoi itself => dedicated buffer for this
@@ -445,17 +453,21 @@ void convoi_info_t::draw(scr_coord pos, scr_size size)
 		if( !line.is_bound() ) {
 			line_selector.set_selection(1);
 		}
-		else if(is_change_allowed) {
-			char id[16];
-			sprintf(id, "%i,%i", line.get_id(), cnv->get_schedule()->get_current_stop());
-			cnv->call_convoi_tool('l', id);
-		}
+		reset_min_windowsize();
 	}
-	else if(  !scd.get_schedule()->empty()  &&  line_selector.get_element(1)->get_text()[0]=='-'  ) {
+	else if(  old_schedule_count != scd.get_schedule()->get_count()  ) {
+		// entry added or removed
 		init_line_selector();
+		reset_min_windowsize();
+	}
+	else if(  old_line_count != cnv->get_owner()->simlinemgmt.get_line_count()  ) {
+		// line added or removed
+		init_line_selector();
+		reset_min_windowsize();
 	}
 
 	line_button.enable( dynamic_cast<line_scrollitem_t*>(line_selector.get_selected_item()) );
+	line_button2.enable( line.is_bound() );
 
 	go_home_button.enable(!route_search_in_progress && is_change_allowed);
 	if(  grund_t* gr=welt->lookup(cnv->get_schedule()->get_current_entry().pos)  ) {
@@ -512,8 +524,14 @@ bool convoi_info_t::action_triggered( gui_action_creator_t *comp, value_t v)
 		// open selected line as schedule
 		if( line_scrollitem_t* li = dynamic_cast<line_scrollitem_t*>(line_selector.get_selected_item()) ) {
 			if(  li->get_line().is_bound()  ) {
-				cnv->get_owner()->simlinemgmt.show_lineinfo( cnv->get_owner(), li->get_line() );
+				cnv->get_owner()->simlinemgmt.show_lineinfo( cnv->get_owner(), li->get_line(), 0 );
 			}
+		}
+	}
+	else if(  comp == &line_button2  ) {
+		// open selected line as schedule
+		if( cnv->get_line().is_bound() ) {
+			cnv->get_owner()->simlinemgmt.show_lineinfo( cnv->get_owner(), cnv->get_line(), -1 );
 		}
 	}
 	else if(  comp == &input  ) {
@@ -533,11 +551,16 @@ bool convoi_info_t::action_triggered( gui_action_creator_t *comp, value_t v)
 	if (comp == &switch_mode) {
 		scd.highlight_schedule(v.i == 1);
 		if (v.i == 1) {
-			if(edit_allowed) {
-				cnv->call_convoi_tool('s', "1"); // set state to EDIT_SCHEDULE, calls cnv->schedule->start_editing(), reset in gui_schedule_t::~gui_schedule_t
+			if(edit_allowed  &&  !cnv->in_depot()) {
+				// if not in depot:
+				// set state to EDIT_SCHEDULE, calls cnv->schedule->start_editing(), reset in gui_schedule_t::~gui_schedule_t
+				cnv->call_convoi_tool('s', "1");
+				scd.init(cnv->get_schedule(), cnv->get_owner(), cnv, cnv->get_line());
+				reset_min_windowsize();
+
 			}
 		}
-		else if(cnv->get_state()==convoi_t::EDIT_SCHEDULE) {
+		else if(cnv->get_state()==convoi_t::EDIT_SCHEDULE  ||  cnv->get_state()==convoi_t::INITIAL) {
 			apply_schedule();
 		}
 	}
@@ -553,7 +576,7 @@ bool convoi_info_t::action_triggered( gui_action_creator_t *comp, value_t v)
 		if(  comp == &go_home_button  &&  !route_search_in_progress  ) {
 			// limit update to certain states that are considered to be safe for schedule updates
 			int state = cnv->get_state();
-			if(state==convoi_t::EDIT_SCHEDULE) {
+			if(state==convoi_t::EDIT_SCHEDULE  ||  cnv->get_state()==convoi_t::INITIAL) {
 				return true;
 			}
 
@@ -587,6 +610,7 @@ bool convoi_info_t::action_triggered( gui_action_creator_t *comp, value_t v)
 		}
 		else if (comp == &scd) {
 			if( v.p == NULL ) {
+				scd.init( cnv->get_schedule(), cnv->get_owner(), cnv, cnv->get_line() );
 				// revert schedule
 				init_line_selector();
 				reset_min_windowsize();
@@ -649,7 +673,7 @@ bool convoi_info_t::infowin_event(const event_t *ev)
 	}
 
 	if(  ev->ev_class == INFOWIN  &&  ev->ev_code == WIN_TOP  ) {
-		if(  switch_mode.get_aktives_tab() == &container_schedule  ) {
+		if(  switch_mode.get_aktives_tab() == &container_schedule  &&  !cnv->in_depot()  ) {
 			cnv->call_convoi_tool( 's', "1" );
 			scd.highlight_schedule( true );
 		}
@@ -716,7 +740,6 @@ void convoi_info_t::rdwr(loadsave_t *file)
 
 	// schedule stuff
 	simline_t::rdwr_linehandle_t(file, line);
-	simline_t::rdwr_linehandle_t(file, old_line);
 	scd.rdwr(file);
 
 	// button-to-chart array

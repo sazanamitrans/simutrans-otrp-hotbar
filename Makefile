@@ -3,25 +3,32 @@
 # (see LICENSE.txt)
 #
 
+# Define variables here to force them as simple flavor. -> Faster parallel builds.
+FLAGS :=
+CFLAGS :=
+LDFLAGS :=
+LIBS :=
+SOURCES :=
+STATIC := 0
+
+
 CFG ?= default
 -include config.$(CFG)
+
 
 HOSTCC  ?=$(CC)
 HOSTCXX ?=$(CXX)
 
-PROFILE       ?= 0
-STATIC        ?= 0
-AV_FOUNDATION ?= 0
-
-ALLEGRO_CONFIG  ?= allegro-config
-SDL_CONFIG      ?= sdl-config
-SDL2_CONFIG     ?= pkg-config sdl2
+ALLEGRO_CONFIG   ?= allegro-config
+SDL_CONFIG       ?= sdl-config
+SDL2_CONFIG      ?= pkg-config sdl2
 #SDL2_CONFIG     ?= sdl2-config
-FREETYPE_CONFIG ?= freetype-config
-#FREETYPE_CONFIG ?= pkg-config freetype2
+FREETYPE_CONFIG  ?= pkg-config freetype2
+#FREETYPE_CONFIG ?= freetype-config
 
-BACKENDS      = allegro gdi sdl sdl2 mixer_sdl mixer_sdl2 posix
-OSTYPES       = amiga beos freebsd haiku linux mingw mac openbsd
+BACKENDS  := allegro gdi sdl sdl2 mixer_sdl mixer_sdl2 posix
+OSTYPES   := amiga beos freebsd haiku linux mac mingw openbsd
+
 
 ifeq ($(findstring $(BACKEND), $(BACKENDS)),)
   $(error Unkown BACKEND "$(BACKEND)", must be one of "$(BACKENDS)")
@@ -32,9 +39,9 @@ ifeq ($(findstring $(OSTYPE), $(OSTYPES)),)
 endif
 
 ifeq ($(BACKEND),posix)
-  COLOUR_DEPTH = 0
+  COLOUR_DEPTH := 0
 else
-  COLOUR_DEPTH = 16
+  COLOUR_DEPTH := 16
 endif
 
 ifeq ($(OSTYPE),amiga)
@@ -56,8 +63,7 @@ else ifeq ($(OSTYPE),mingw)
     LDFLAGS += -static-libgcc -static-libstdc++ -static
   endif
   LDFLAGS   += -pthread
-  SOURCES   += sys/simsys_w32_png.cc
-  CFLAGS    += -Wno-deprecated-copy -Wno-c++11-narrowing -DNOMINMAX -DWIN32_LEAN_AND_MEAN -DWINVER=0x0501 -D_WIN32_IE=0x0500
+  CFLAGS    += -Wno-deprecated-copy -DNOMINMAX -DWIN32_LEAN_AND_MEAN -DWINVER=0x0501 -D_WIN32_IE=0x0500
   LIBS      += -lmingw32 -lgdi32 -lwinmm -lws2_32 -limm32
 
   # Disable the console on Windows unless WIN32_CONSOLE is set or graphics are disabled
@@ -70,6 +76,8 @@ else ifeq ($(OSTYPE),mingw)
   else
     LDFLAGS += -mwindows
   endif
+else ifeq ($(OSTYPE),linux)
+  LD_FLAGS += "-Wl,-Bstatic"
 endif
 
 ifeq ($(BACKEND),sdl2)
@@ -80,7 +88,7 @@ else
   SOURCES += sys/clipboard_internal.cc
 endif
 
-LIBS += -lbz2 -lz
+LIBS += -lbz2 -lz -lpng
 
 ifdef OPTIMISE
   ifeq ($(shell expr $(OPTIMISE) \>= 1), 1)
@@ -95,8 +103,14 @@ else
   CFLAGS += -O1
 endif
 
+ifneq ($(LTO),)
+  CFLAGS += -flto
+  LDFLAGS += -flto
+endif
+
 ifdef DEBUG
   MSG_LEVEL ?= 3
+  PROFILE ?= 0
 
   ifeq ($(shell expr $(DEBUG) \>= 1), 1)
     CFLAGS   += -g -DDEBUG
@@ -128,7 +142,7 @@ ifdef USE_FREETYPE
       CFLAGS += $(shell $(FREETYPE_CONFIG) --cflags)
       ifeq ($(shell expr $(STATIC) \>= 1), 1)
         # since static is not supported by slightly old freetype versions
-        FTF = $(shell $(FREETYPE_CONFIG) --libs --static)
+        FTF := $(shell $(FREETYPE_CONFIG) --libs --static)
         ifneq ($(FTF),)
           LDFLAGS += $(FTF)
         else
@@ -168,10 +182,25 @@ endif
 
 ifdef USE_ZSTD
   ifeq ($(shell expr $(USE_ZSTD) \>= 1), 1)
-    FLAGS   += -DUSE_ZSTD
+    CFLAGS  += -DUSE_ZSTD
     LDFLAGS += -lzstd
     SOURCES += io/rdwr/zstd_file_rdwr_stream.cc
   endif
+endif
+
+ifdef USE_FLUIDSYNTH_MIDI
+  ifeq ($(shell expr $(USE_FLUIDSYNTH_MIDI) \>= 1), 1)
+    CFLAGS  += -DUSE_FLUIDSYNTH_MIDI
+    SOURCES += music/fluidsynth.cc
+    SOURCES += gui/loadsoundfont_frame.cc
+    LDFLAGS += -lfluidsynth
+    ifeq ($(OSTYPE),mingw)
+      # fluidsynth.pc doesn't properly list dependant libraries, unable to use pkg-config. Manually listed below. Only valid for fluidsynth built with options: "-DBUILD_SHARED_LIBS=0 -Denable-aufile=0 -Denable-dbus=0 -Denable-ipv6=0 -Denable-jack=0 -Denable-ladspa=0 -Denable-midishare=0 -Denable-opensles=0 -Denable-oboe=0 -Denable-oss=0 -Denable-readline=0 -Denable-winmidi=0 -Denable-waveout=0 -Denable-libsndfile=0 -Denable-network=0 -Denable-pulseaudio=0 Denable-dsound=1 -Denable-sdl2=0"
+      LDFLAGS += -lglib-2.0 -lintl -liconv -ldsound -lole32
+    endif
+  endif
+else
+  USE_FLUIDSYNTH_MIDI := 0
 endif
 
 ifdef PROFILE
@@ -203,17 +232,17 @@ endif
 ifdef WITH_REVISION
   ifeq ($(shell expr $(WITH_REVISION) \>= 1), 1)
     ifeq ($(shell expr $(WITH_REVISION) \>= 2), 1)
-      REV = $(WITH_REVISION)
+      REV := $(WITH_REVISION)
     else
       $(info Query SVN revision ...)
-      REV = $(shell svnversion)
+      REV := $(shell svnversion)
       $(info Revision is $(REV))
     endif
     # we can query the svn directly, should the folder is not an svn (like on github)
     ifeq ($(REV),)
       ifeq ($(shell expr $(WITH_REVISION) \<= 1), 1)
         $(info Query SVN revision with SVN directly...)
-        REV = $(shell svn info --show-item revision svn://servers.simutrans.org/simutrans | sed "s/[0-9]*://" | sed "s/M.*//")
+        REV := $(shell svn info --show-item revision svn://servers.simutrans.org/simutrans | sed "s/[0-9]*://" | sed "s/M.*//")
          $(info Revision is $(REV))
       endif
     endif
@@ -223,6 +252,7 @@ ifdef WITH_REVISION
     endif
   endif
 endif
+
 
 CFLAGS   += -Wall -Wextra -Wcast-qual -Wpointer-arith -Wcast-align $(FLAGS)
 CCFLAGS  += -ansi -Wstrict-prototypes -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64
@@ -234,6 +264,7 @@ SOURCES += bauer/fabrikbauer.cc
 SOURCES += bauer/goods_manager.cc
 SOURCES += bauer/hausbauer.cc
 SOURCES += bauer/tunnelbauer.cc
+SOURCES += bauer/tree_builder.cc
 SOURCES += bauer/vehikelbauer.cc
 SOURCES += bauer/wegbauer.cc
 SOURCES += boden/boden.cc
@@ -374,6 +405,7 @@ SOURCES += gui/factorylist_stats_t.cc
 SOURCES += gui/goods_frame_t.cc
 SOURCES += gui/goods_stats_t.cc
 SOURCES += gui/ground_info.cc
+SOURCES += gui/groundobj_edit.cc
 SOURCES += gui/gui_frame.cc
 SOURCES += gui/gui_theme.cc
 SOURCES += gui/halt_info.cc
@@ -425,6 +457,10 @@ SOURCES += gui/trafficlight_info.cc
 SOURCES += gui/vehiclelist_frame.cc
 SOURCES += gui/welt.cc
 SOURCES += io/classify_file.cc
+SOURCES += io/raw_image.cc
+SOURCES += io/raw_image_bmp.cc
+SOURCES += io/raw_image_png.cc
+SOURCES += io/raw_image_ppm.cc
 SOURCES += io/rdwr/bzip2_file_rdwr_stream.cc
 SOURCES += io/rdwr/raw_file_rdwr_stream.cc
 SOURCES += io/rdwr/rdwr_stream.cc
@@ -581,14 +617,17 @@ endif
 
 ifeq ($(BACKEND),gdi)
   SOURCES += sys/simsys_w.cc
-  SOURCES += music/w32_midi.cc
   SOURCES += sound/win32_sound_xa.cc
-	LDFLAGS += -lxaudio2_8
+  LDFLAGS += -lxaudio2_8
+  ifneq ($(shell expr $(USE_FLUIDSYNTH_MIDI) \>= 1), 1)
+    SOURCES += music/w32_midi.cc
+  endif
 endif
 
 ifeq ($(BACKEND),sdl)
   SOURCES += sys/simsys_s.cc
   ifeq ($(OSTYPE),mac)
+    AV_FOUNDATION ?= 0
     ifeq ($(shell expr $(AV_FOUNDATION) \>= 1), 1)
       # Core Audio (AVFoundation) base sound system routines
       SOURCES += sound/AVF_core-audio_sound.mm
@@ -632,23 +671,30 @@ endif
 ifeq ($(BACKEND),sdl2)
   SOURCES += sys/simsys_s2.cc
   ifeq ($(OSTYPE),mac)
+    AV_FOUNDATION ?= 0
     ifeq ($(shell expr $(AV_FOUNDATION) \>= 1), 1)
       # Core Audio (AVFoundation) base sound system routines
       SOURCES += sound/AVF_core-audio_sound.mm
-      SOURCES += music/AVF_core-audio_midi.mm
       LIBS    += -framework Foundation -framework AVFoundation
+      ifneq ($(shell expr $(USE_FLUIDSYNTH_MIDI) \>= 1), 1)
+        SOURCES += music/AVF_core-audio_midi.mm
+      endif
     else
       # Core Audio (Quicktime) base sound system routines
       SOURCES += sound/core-audio_sound.mm
-      SOURCES += music/core-audio_midi.mm
       LIBS    += -framework Foundation -framework QTKit
+      ifneq ($(shell expr $(USE_FLUIDSYNTH_MIDI) \>= 1), 1)
+        SOURCES += music/core-audio_midi.mm
+      endif
     endif
   else
     SOURCES   += sound/sdl2_sound.cc
-    ifneq ($(OSTYPE),mingw)
-      SOURCES += music/no_midi.cc
-    else
-      SOURCES += music/w32_midi.cc
+    ifneq ($(shell expr $(USE_FLUIDSYNTH_MIDI) \>= 1), 1)
+      ifneq ($(OSTYPE),mingw)
+        SOURCES += music/no_midi.cc
+      else
+        SOURCES += music/w32_midi.cc
+      endif
     endif
   endif
 

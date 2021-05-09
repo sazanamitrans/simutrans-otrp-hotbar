@@ -19,6 +19,7 @@
 #include "components/gui_scrolled_list.h"
 #include "components/gui_speedbar.h"
 #include "components/gui_tab_panel.h"
+#include "components/gui_textarea.h"
 #include "components/gui_textinput.h"
 
 #include "../linehandle_t.h"
@@ -50,6 +51,9 @@ class line_management_gui_t : public gui_frame_t, public action_listener_t
 
 	gui_aligned_container_t container_schedule, container_stats, container_convois, container_halts;
 
+	cbuffer_t loading_text;
+	gui_textarea_t loading_info;
+
 	player_t *player;
 
 	// so even japanese can have long enough names ...
@@ -63,12 +67,12 @@ class line_management_gui_t : public gui_frame_t, public action_listener_t
 
 	sint32 capacity, load;
 
-	void init_chart();
+	void init();
 
 	void apply_schedule();
 
 public:
-	line_management_gui_t(linehandle_t line = linehandle_t(), player_t* player_ = NULL);
+	line_management_gui_t(linehandle_t line = linehandle_t(), player_t* player_ = NULL, int active_tab=0 );
 
 	bool action_triggered(gui_action_creator_t*, value_t) OVERRIDE;
 

@@ -47,6 +47,7 @@
     <ClCompile Include="$(MSBuildThisFileDirectory)bauer\fabrikbauer.cc" />
     <ClCompile Include="$(MSBuildThisFileDirectory)bauer\goods_manager.cc" />
     <ClCompile Include="$(MSBuildThisFileDirectory)bauer\hausbauer.cc" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)bauer\tree_builder.cc" />
     <ClCompile Include="$(MSBuildThisFileDirectory)bauer\tunnelbauer.cc" />
     <ClCompile Include="$(MSBuildThisFileDirectory)bauer\vehikelbauer.cc" />
     <ClCompile Include="$(MSBuildThisFileDirectory)bauer\wegbauer.cc" />
@@ -155,6 +156,7 @@
     <ClCompile Include="$(MSBuildThisFileDirectory)gui\factorylist_stats_t.cc" />
     <ClCompile Include="$(MSBuildThisFileDirectory)gui\goods_frame_t.cc" />
     <ClCompile Include="$(MSBuildThisFileDirectory)gui\goods_stats_t.cc" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)gui\groundobj_edit.cc" />
     <ClCompile Include="$(MSBuildThisFileDirectory)gui\ground_info.cc" />
     <ClCompile Include="$(MSBuildThisFileDirectory)gui\gui_frame.cc" />
     <ClCompile Include="$(MSBuildThisFileDirectory)gui\gui_theme.cc" />
@@ -237,6 +239,10 @@
     <ClCompile Include="$(MSBuildThisFileDirectory)gui\components\gui_waytype_tab_panel.cc" />
     <ClCompile Include="$(MSBuildThisFileDirectory)gui\components\gui_world_view_t.cc" />
     <ClCompile Include="$(MSBuildThisFileDirectory)io\classify_file.cc" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)io\raw_image.cc" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)io\raw_image_bmp.cc" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)io\raw_image_png.cc" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)io\raw_image_ppm.cc" />
     <ClCompile Include="$(MSBuildThisFileDirectory)io\rdwr\bzip2_file_rdwr_stream.cc" />
     <ClCompile Include="$(MSBuildThisFileDirectory)io\rdwr\raw_file_rdwr_stream.cc" />
     <ClCompile Include="$(MSBuildThisFileDirectory)io\rdwr\rdwr_stream.cc" />
@@ -387,6 +393,7 @@
     <ClInclude Include="$(MSBuildThisFileDirectory)bauer\fabrikbauer.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)bauer\goods_manager.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)bauer\hausbauer.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)bauer\tree_builder.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)bauer\tunnelbauer.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)bauer\vehikelbauer.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)bauer\wegbauer.h" />
@@ -517,6 +524,7 @@
     <ClInclude Include="$(MSBuildThisFileDirectory)gui\factorylist_stats_t.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)gui\goods_frame_t.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)gui\goods_stats_t.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)gui\groundobj_edit.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)gui\ground_info.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)gui\gui_frame.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)gui\gui_theme.h" />
@@ -604,6 +612,7 @@
     <ClInclude Include="$(MSBuildThisFileDirectory)ifc\sync_steppable.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)music\music.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)io\classify_file.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)io\raw_image.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)io\rdwr\bzip2_file_rdwr_stream.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)io\rdwr\raw_file_rdwr_stream.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)io\rdwr\rdwr_stream.h" />

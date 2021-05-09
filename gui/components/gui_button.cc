@@ -24,6 +24,7 @@
 #include "../../simworld.h"
 #include "../../boden/grund.h"
 #include "../../display/viewport.h"
+#include "../../obj/zeiger.h"
 
 #include "../gui_frame.h"
 
@@ -113,6 +114,10 @@ void button_t::set_typ(enum type t)
 			set_size( scr_size(gui_theme_t::gui_button_size.w, max(D_BUTTON_HEIGHT,LINESPACE)) );
 			break;
 
+		case imagebox:
+			img = IMG_EMPTY;
+			break;
+
 		default:
 			break;
 	}
@@ -173,6 +178,16 @@ scr_size button_t::get_min_size() const
 			size.w = max(size.w, w);
 			return size;
 		}
+
+		case imagebox: {
+			scr_coord_val x = 0, y = 0, w = 0, h = 0;
+			display_get_image_offset(img, &x, &y, &w, &h);
+			scr_size size(gui_theme_t::gui_pos_button_size);
+			size.w = max(size.w, w+2);
+			size.h = max(size.h, h+2);
+			return size;
+		}
+
 		default:
 			return gui_component_t::get_min_size();
 	}
@@ -265,24 +280,25 @@ bool button_t::infowin_event(const event_t *ev)
 			call_listeners( &targetpos );
 			if (type == posbutton_automatic) {
 				welt->get_viewport()->change_world_position( targetpos );
+				welt->get_zeiger()->change_pos( targetpos );
 			}
-
+			return true;
 		}
 		else {
 			if(  type & AUTOMATIC_BIT  ) {
 				pressed = !pressed;
 			}
-
 			call_listeners( (long)0 );
+			return true;
 		}
 	}
 	else if(IS_LEFTREPEAT(ev)) {
 		if((type&TYPE_MASK)>=repeatarrowleft) {
 			call_listeners( (long)1 );
+			return true;
 		}
 	}
-	// swallow all not handled non-keyboard events
-	return (ev->ev_class != EVENT_KEYBOARD);
+	return false;
 }
 
 
@@ -339,6 +355,15 @@ void button_t::draw(scr_coord offset)
 				if(  win_get_focus()==this  ) {
 					draw_focus_rect( area );
 				}
+			}
+			break;
+
+		case imagebox:
+			display_img_stretch(gui_theme_t::button_tiles[get_state_offset()], area);
+			display_img_stretch_blend(gui_theme_t::button_color_tiles[b_enabled && pressed], area, (pressed ? text_color: background_color) | TRANSPARENT75_FLAG | OUTLINE_FLAG);
+			display_img_aligned(img, area, ALIGN_CENTER_H | ALIGN_CENTER_V, true);
+			if (win_get_focus() == this) {
+				draw_focus_rect(area);
 			}
 			break;
 
@@ -408,6 +433,7 @@ void button_t::update_focusability()
 			break;
 
 		// those cannot receive focus ...
+		case imagebox:
 		case arrowleft:
 		case repeatarrowleft:
 		case arrowright:

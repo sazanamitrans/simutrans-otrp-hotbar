@@ -12,8 +12,8 @@
 #include "gui_action_creator.h"
 #include "gui_label.h"
 #include "gui_button.h"
-#include "gui_component.h"
-#include "gui_scrolled_list.h"
+#include "gui_aligned_container.h"
+#include "gui_numberinput.h"
 
 
 /**
@@ -22,63 +22,29 @@
  */
 class gui_timeinput_t :
 	public gui_action_creator_t,
-	public gui_scrolled_list_t::scrollitem_t
+	public gui_aligned_container_t,
+	public action_listener_t
 {
 private:
-	// the input field
-	gui_label_t time_out;
-
-	// entry displayed for 
-	const char *null_text;
-
-	// arrow buttons for increasing / decr.
-	button_t bt_left, bt_right;
-
-	uint16 ticks;
-
-	char textbuffer[64];
-
-	sint32 repeat_steps;
-	static scr_coord_val text_width;
+	gui_numberinput_t days, hours, minutes;
 
 	bool b_enabled;
 
 public:
 	gui_timeinput_t(const char *null_text);
 
-	void set_size(scr_size size) OVERRIDE;
+	sint32 get_ticks();
+	void set_ticks(uint16 t);
 
-	sint32 get_ticks() const { return ticks; }
-	void set_ticks(uint16);
-
-	void set_null_text( const char *t ) { null_text = t; }
-
-	bool infowin_event(event_t const*) OVERRIDE;
-
-	void enable() { b_enabled = true; set_focusable(true); bt_left.enable(); bt_right.enable(); }
-	void disable() { b_enabled = false; set_focusable(false); bt_left.disable(); bt_right.disable(); }
-	bool enabled() const { return b_enabled; }
-	bool is_focusable() OVERRIDE { return b_enabled && gui_component_t::is_focusable(); }
-	void enable( bool yesno ) {
-		if( yesno && !gui_component_t::is_focusable() ) {
-			enable();
-		}
-		else if( !yesno  &&  gui_component_t::is_focusable() ) {
-			disable();
-		}
-	}
-
-	void draw(scr_coord offset) OVERRIDE;
-
-	scr_size get_max_size() const OVERRIDE;
-
-	scr_size get_min_size() const OVERRIDE;
-
-	char const *get_text() const OVERRIDE { return textbuffer; }
+	bool action_triggered(gui_action_creator_t*, value_t) OVERRIDE;
 
 	void rdwr( loadsave_t *file );
 
-	static bool compare( const gui_component_t *a, const gui_component_t *b );
+	void draw(scr_coord offset) OVERRIDE;
+
+	scr_size get_min_size() const;
+
+	void enable(bool b) { b_enabled = b;  }
 };
 
 #endif

@@ -122,6 +122,8 @@ tool_t *create_general_tool(int toolnr)
 		case TOOL_MERGE_STOP:                  tool = new tool_merge_stop_t();          break;
 		case TOOL_EXEC_SCRIPT:                 tool = new tool_exec_script_t();         break;
 		case TOOL_EXEC_TWO_CLICK_SCRIPT:       tool = new tool_exec_two_click_script_t(); break;
+		case TOOL_PLANT_GROUNDOBJ:             tool = new tool_plant_groundobj_t();     break;
+		case TOOL_ADD_MESSAGE:                 tool = new tool_add_message_t();         break;
 		default:
 			dbg->error("create_general_tool()","cannot satisfy request for general_tool[%i]!",toolnr);
 			return NULL;
@@ -168,12 +170,13 @@ tool_t *create_simple_tool(int toolnr)
 		case TOOL_CHANGE_TRAFFIC_LIGHT: tool = new tool_change_traffic_light_t(); break;
 		case TOOL_CHANGE_CITY:          tool = new tool_change_city_t();          break;
 		case TOOL_RENAME:               tool = new tool_rename_t();               break;
-		case TOOL_ADD_MESSAGE:          tool = new tool_add_message_t();          break;
 		case TOOL_TOGGLE_RESERVATION:   tool = new tool_toggle_reservation_t();   break;
 		case TOOL_VIEW_OWNER:           tool = new tool_view_owner_t();           break;
 		case TOOL_HIDE_UNDER_CURSOR:    tool = new tool_hide_under_cursor_t();    break;
 		case TOOL_MOVE_MAP:             tool = new tool_move_map_t();             break;
 		case TOOL_ROLLUP_ALL_WIN:       tool = new tool_rollup_all_win_t();       break;
+		case TOOL_RECOLOUR_TOOL:		tool = new tool_recolour_t();			  break;
+		case UNUSED_TOOL_ADD_MESSAGE: // fall-through - intended!!!111elf
 		case UNUSED_WKZ_PWDHASH_TOOL:
 			dbg->warning("create_simple_tool()","deprecated tool [%i] requested", toolnr);
 			return NULL;
@@ -226,6 +229,7 @@ tool_t *create_dialog_tool(int toolnr)
 		case DIALOG_LIST_DEPOT:      tool = new dialog_list_depot_t();      break;
 		case DIALOG_LIST_VEHICLE:    tool = new dialog_list_vehicle_t();    break;
 		case DIALOG_SCRIPT_TOOL:     tool = new dialog_script_tool_t();     break;
+		case DIALOG_EDIT_GROUNDOBJ:  tool = new dialog_edit_groundobj_t();  break;
 		default:
 			dbg->error("create_dialog_tool()","cannot satisfy request for dialog_tool[%i]!",toolnr);
 			return NULL;
@@ -260,7 +264,7 @@ tool_t *create_tool(int toolnr)
  */
 void general_tool_get_desc_builder(uint16 id, const char *param_str, const obj_desc_timelined_t* &desc, tool_t* &tool)
 {
-	if (  id & (SIMPLE_TOOL | DIALOGE_TOOL) ) {
+	if (  id & ((uint16)SIMPLE_TOOL | (uint16)DIALOGE_TOOL) ) {
 		return;
 	}
 	id = id & (~GENERAL_TOOL);
@@ -951,10 +955,10 @@ void toolbar_t::update(player_t *player)
 					hausbauer_t::fill_menu( tool_selector, utype, way, get_sound(c));
 				}
 				else if (char const* const c = strstart(param, "scripts(")) {
-					const char* end = strchr(c, ')');
+					const char* end = strchr(c, '\0');
 					char buf[1000];
 					size_t len = end ? min(lengthof(buf)-1, end-c) : lengthof(buf)-1;
-					tstrncpy(buf, c, len+1);
+					tstrncpy(buf, c, len);
 					script_tool_manager_t::fill_menu(tool_selector, buf, get_sound(c));
 				}
 				else if (param[0] == '-') {

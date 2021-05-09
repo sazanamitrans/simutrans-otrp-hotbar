@@ -280,7 +280,7 @@ loadsave_t::file_status_t loadsave_t::rd_open(const char *filename_utf8)
 {
 	close();
 
-	const file_classify_status_t cl_status = classify_file(filename_utf8, &finfo);
+	const file_classify_status_t cl_status = classify_save_file(filename_utf8, &finfo);
 
 	if (cl_status != FILE_CLASSIFY_OK) {
 		// file likely does not exist
@@ -568,8 +568,12 @@ void loadsave_t::flush_buffer(int buf_num)
 	pthread_mutex_lock(&loadsave_mutex);
 #endif
 
-	const size_t sz = stream->write(buff[buf_num].buf, buff[buf_num].pos);
-	assert(sz == buff[buf_num].pos);
+	// Cannot abort the saving process, so just ignore any further flushes
+	// if the previous flush has failed.
+	// loadsave_t::close() handles propagation of the error message.
+	if (stream->get_status() == rdwr_stream_t::STATUS_OK) {
+		stream->write(buff[buf_num].buf, buff[buf_num].pos);
+	}
 	buff[buf_num].pos = 0;
 
 #ifdef MULTI_THREAD

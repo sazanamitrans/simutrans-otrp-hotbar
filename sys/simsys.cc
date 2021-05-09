@@ -141,7 +141,7 @@ int get_mouse_y()
 uint8 dr_get_max_threads()
 {
 	uint8 max_threads = 0;
-#ifdef MULTITHREAD
+#ifdef MULTI_THREAD
 #if 0
 	// does not work when crosscompile with mingw!
 	max_threads = std::thread::hardware_concurrency();
@@ -1000,13 +1000,12 @@ const char *dr_get_locale_string()
 #endif
 
 
-
 void dr_fatal_notify(char const* const msg)
 {
+	fprintf(stderr, "dr_fatal_notify: ERROR: %s\n", msg);
+
 #ifdef _WIN32
 	MessageBoxA(0, msg, "Fatal Error", MB_ICONEXCLAMATION);
-#else
-	fputs(msg, stderr);
 #endif
 }
 

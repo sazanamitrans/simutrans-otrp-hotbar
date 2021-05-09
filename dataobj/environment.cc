@@ -72,6 +72,8 @@ sint16 env_t::global_volume = 127;
 uint32 env_t::sound_distance_scaling;
 sint16 env_t::midi_volume = 127;
 uint16 env_t::specific_volume[MAX_SOUND_TYPES];
+
+std::string env_t::soundfont_filename = "";
 bool env_t::global_mute_sound = false;
 bool env_t::mute_midi = false;
 bool env_t::shuffle_midi = true;
@@ -116,7 +118,7 @@ bool env_t::window_buttons_right;
 bool env_t::second_open_closes_win;
 bool env_t::remember_window_positions;
 bool env_t::window_frame_active;
-uint8 env_t::verbose_debug;
+log_t::level_t env_t::verbose_debug;
 uint8 env_t::default_sortmode;
 uint32 env_t::default_mapmode;
 uint8 env_t::show_month;
@@ -216,7 +218,7 @@ void env_t::init()
 	remember_window_positions = true;
 
 	// debug level (0: only fatal, 1: error, 2: warning, 3: all
-	verbose_debug = 0;
+	verbose_debug = log_t::LEVEL_FATAL;
 
 	default_sortmode = 1; // sort by amount
 	default_mapmode = 0;  // show cities
@@ -531,7 +533,14 @@ void env_t::rdwr(loadsave_t *file)
 	}
 	if( file->is_version_atleast( 122, 1 ) ) {
 		file->rdwr_bool( env_t::numpad_always_moves_map );
+
+		plainstring str = soundfont_filename.c_str();
+		file->rdwr_str( str );
+		if(  file->is_loading()  ) {
+			soundfont_filename = str ? str.c_str() : "";
+		}
 	}
+
 	// server settings are not saved, since they are server specific
 	// and could be different on different servers on the same computers
 }

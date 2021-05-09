@@ -1304,7 +1304,7 @@ bool depot_frame_t::action_triggered( gui_action_creator_t *comp, value_t p)
 		}
 		else if(  comp == &line_button  ) {
 			if(  cnv.is_bound()  ) {
-				cnv->get_owner()->simlinemgmt.show_lineinfo( cnv->get_owner(), cnv->get_line() );
+				cnv->get_owner()->simlinemgmt.show_lineinfo( cnv->get_owner(), cnv->get_line(), 0 );
 				welt->set_dirty();
 			}
 		}
@@ -1475,6 +1475,10 @@ bool depot_frame_t::infowin_event(const event_t *ev)
 		return true;
 	}
 
+	if (ev->ev_code == WIN_TOP) {
+		update_data();
+	}
+
 	if(  swallowed  &&  get_focus()==&name_filter_input  &&  (ev->ev_class == EVENT_KEYBOARD  ||  ev->ev_class == EVENT_STRING)  ) {
 		depot_t::update_all_win();
 	}
@@ -1550,7 +1554,7 @@ void depot_frame_t::open_schedule_editor()
 
 	if(  cnv.is_bound()  &&  cnv->get_vehicle_count() > 0  ) {
 		if(  selected_line.is_bound()  &&  event_get_last_control_shift() == 2  ) { // update line with CTRL-click
-			create_win( new line_management_gui_t( selected_line, depot->get_owner() ), w_info, (ptrdiff_t)selected_line.get_rep() );
+			create_win( new line_management_gui_t( selected_line, depot->get_owner(), 0 ), w_info, (ptrdiff_t)selected_line.get_rep() );
 		}
 		else { // edit individual schedule
 			// this can happen locally, since any update of the schedule is done during closing window

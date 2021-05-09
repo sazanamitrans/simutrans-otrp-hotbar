@@ -143,18 +143,27 @@ const char *network_gameinfo(const char *cp, gameinfo_t *gi)
 
 		if (err == NULL) {
 			// now into gameinfo
-			const loadsave_t::file_status_t err_code = fd.rd_open( filename );
+			const loadsave_t::file_status_t status = fd.rd_open( filename );
 
-			if(  err_code == loadsave_t::FILE_STATUS_OK  ) {
-				gameinfo_t *pgi = new gameinfo_t( &fd );
-				*gi = *pgi;
-				delete pgi;
-				fd.close();
+			if(  status == loadsave_t::FILE_STATUS_ERR_FUTURE_VERSION  ) {
+				err = "Server version too new";
+			}
+			else if(  status == loadsave_t::FILE_STATUS_ERR_NO_VERSION  ) {
+				err = "Unknown server version";
+			}
+			else if(  status != loadsave_t::FILE_STATUS_OK  ) {
+				err = "Server busy";
+			}
+			else if(  fd.is_version_less(120, 8)  ) {
+				// Querying gameinfo of older server versions may crash the client
+				// See gameinfo_t::rdwr
+				err = "Server version too old";
 			}
 			else {
-				// some more insets, while things may have failed
-				err = (err_code == loadsave_t::FILE_STATUS_ERR_FUTURE_VERSION) ? "Server version too new" : "Server busy";
+				*gi = gameinfo_t( &fd );
 			}
+
+			fd.close();
 		}
 		dr_remove( filename );
 end:

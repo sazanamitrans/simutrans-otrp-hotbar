@@ -30,7 +30,6 @@
 #include "simdebug.h"
 
 
-
 struct sound_info;
 class stadt_t;
 class fabrik_t;
@@ -50,6 +49,7 @@ class goods_desc_t;
 class memory_rw_t;
 class viewport_t;
 class records_t;
+class loadingscreen_t;
 
 
 /**
@@ -253,8 +253,8 @@ private:
 	/**
 	 * Table for fast conversion from height to climate.
 	 */
-	uint8 height_to_climate[128];
-	uint8 num_climates_at_height[128];
+	uint8 height_to_climate[256];
+	uint8 num_climates_at_height[256];
 
 	/**
 	* Contains the intended climate for a tile
@@ -644,6 +644,8 @@ private:
 	 */
 	void load(loadsave_t *file);
 
+	void rdwr_gamestate(loadsave_t *file, loadingscreen_t *ls);
+
 	/**
 	 * Removes all objects, deletes all data structures and frees all accessible memory.
 	 */
@@ -679,7 +681,9 @@ private:
 	 * in the rectangle from (0,0) till (old_x, old_y).
 	 * It's now an extra function so we don't need the code twice.
 	 */
-	void distribute_groundobjs_cities(int new_cities, sint32 new_mean_citizen_count, sint16 old_x, sint16 old_y );
+	void distribute_cities(int new_cities, sint32 new_mean_citizen_count, sint16 old_x, sint16 old_y );
+	void distribute_groundobjs(sint16 old_x, sint16 old_y);
+	void distribute_movingobjs(sint16 old_x, sint16 old_y);
 
 	/**
 	 * The last time when a server announce was performed (in ms).

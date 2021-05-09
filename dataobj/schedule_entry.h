@@ -19,7 +19,7 @@ struct schedule_entry_t
 public:
 	schedule_entry_t() {}
 
-	schedule_entry_t(koord3d const& pos, uint const minimum_loading, sint8 const waiting_time) :
+	schedule_entry_t(koord3d const& pos, uint8 const minimum_loading, uint16 const waiting_time) :
 		pos(pos),
 		minimum_loading(minimum_loading),
 		waiting_time(waiting_time)
@@ -44,8 +44,9 @@ public:
 	 */
 	uint16 waiting_time;
 
-	sint32 get_waiting_ticks() const {
-		return (sint32)((world()->ticks_per_world_month_shift >= 16) ? ((uint32)waiting_time << (world()->ticks_per_world_month_shift - 16)) : ((uint32)waiting_time >> (16 - world()->ticks_per_world_month_shift)));
+	uint32 get_waiting_ticks() const {
+		return  world()->ticks_per_world_month_shift >= 16  ? (uint32)waiting_time << (world()->ticks_per_world_month_shift - 16)
+		                                                    : (uint32)waiting_time >> (16 - world()->ticks_per_world_month_shift);
 	}
 
 	// true if this is an absolute dparture time and not maximum waiting time

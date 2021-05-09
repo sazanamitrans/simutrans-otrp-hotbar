@@ -311,7 +311,7 @@ private:
 	array_tpl<ware_production_t> output; ///< array for output/produced goods
 
 	/// Accumulated time since last production
-	sint32 delta_sum;
+	uint32 delta_sum;
 	uint32 delta_menge;
 
 	// production remainder when scaled to PRODUCTION_DELTA_T. added back next step to eliminate cumulative error
@@ -628,6 +628,7 @@ public:
 	void build(sint32 rotate, bool build_fields, bool force_initial_prodbase);
 
 	sint16 get_rotate() const { return rotate; }
+	void set_rotate( uint8 r ) { rotate = r; }
 
 	/* field generation code
 	 * spawns a field for sure if probability>=1000
@@ -666,11 +667,11 @@ public:
 
 	/* returns the status of the current factory, as well as output */
 	enum {
-		bad,
-		medium,
-		good,
-		inactive,
-		nothing
+		STATUS_BAD,
+		STATUS_MEDIUM,
+		STATUS_GOOD,
+		STATUS_INACTIVE,
+		STATUS_NOTHING
 	};
 	static uint8 status_to_color[5];
 

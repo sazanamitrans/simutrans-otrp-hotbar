@@ -27,6 +27,8 @@ class gui_numberinput_t :
 private:
 	bool check_value(sint32 _value);
 
+	scr_coord_val max_numbertext_width;
+
 	// more sophisticated increase routines
 	static sint8 percent[7];
 	sint32 get_prev_value();
@@ -104,9 +106,6 @@ public:
 
 	bool infowin_event(event_t const*) OVERRIDE;
 
-	/**
-	 * Draw the component
-	 */
 	void draw(scr_coord offset) OVERRIDE;
 
 	bool action_triggered(gui_action_creator_t*, value_t) OVERRIDE;

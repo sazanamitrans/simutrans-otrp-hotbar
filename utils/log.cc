@@ -44,7 +44,7 @@
  */
 void log_t::debug(const char *who, const char *format, ...)
 {
-	if(log_debug  &&  debuglevel>=4) {
+	if(log_debug  &&  debuglevel >= log_t::LEVEL_DEBUG) {
 		va_list argptr;
 		va_start(argptr, format);
 
@@ -86,7 +86,7 @@ void log_t::debug(const char *who, const char *format, ...)
  */
 void log_t::message(const char *who, const char *format, ...)
 {
-	if(debuglevel>=3) {
+	if(debuglevel >= log_t::LEVEL_MSG) {
 		va_list argptr;
 		va_start(argptr, format);
 
@@ -128,7 +128,7 @@ void log_t::message(const char *who, const char *format, ...)
  */
 void log_t::warning(const char *who, const char *format, ...)
 {
-	if(debuglevel>=2) {
+	if(debuglevel >= log_t::LEVEL_WARN) {
 		va_list argptr;
 		va_start(argptr, format);
 
@@ -170,7 +170,7 @@ void log_t::warning(const char *who, const char *format, ...)
  */
 void log_t::error(const char *who, const char *format, ...)
 {
-	if(debuglevel>=1) {
+	if(debuglevel >= log_t::LEVEL_ERROR) {
 		va_list argptr;
 		va_start(argptr, format);
 
@@ -184,7 +184,7 @@ void log_t::error(const char *who, const char *format, ...)
 			}
 
 			fprintf(log ,"For help with this error or to file a bug report please see the Simutrans forum:\n");
-			fprintf(log ,"http://forum.simutrans.com\n");
+			fprintf(log ,"https://forum.simutrans.com\n");
 		}
 		va_end(argptr);
 
@@ -195,7 +195,7 @@ void log_t::error(const char *who, const char *format, ...)
 			fprintf(tee,"\n");
 
 			fprintf(tee ,"For help with this error or to file a bug report please see the Simutrans forum:\n");
-			fprintf(tee ,"http://forum.simutrans.com\n");
+			fprintf(tee ,"https://forum.simutrans.com\n");
 		}
 		va_end(argptr);
 
@@ -220,7 +220,7 @@ void log_t::error(const char *who, const char *format, ...)
  */
 void log_t::doubled(const char *what, const char *name )
 {
-	if(debuglevel>=2) {
+	if(debuglevel >= log_t::LEVEL_WARN) {
 
 		if( log ) {                             /* only log when a log */
 			fprintf(log ,"Warning: object %s::%s is overlaid!\n",what,name); /* is already open */
@@ -253,7 +253,13 @@ void log_t::fatal(const char *who, const char *format, ...)
 	va_start(argptr, format);
 
 	static char formatbuffer[512];
-	sprintf( formatbuffer, "FATAL ERROR: %s - %s\nAborting program execution ...\n\nFor help with this error or to file a bug report please see the Simutrans forum at\nhttp://forum.simutrans.com\n", who, format );
+	sprintf( formatbuffer,
+		"FATAL ERROR: %s - %s\n"
+		"Aborting program execution ...\n"
+		"\n"
+		"For help with this error or to file a bug report please see the Simutrans forum at\n"
+		"https://forum.simutrans.com\n",
+		who, format );
 
 	static char buffer[8192];
 	int n = vsprintf( buffer, formatbuffer, argptr );
@@ -290,7 +296,9 @@ void log_t::fatal(const char *who, const char *format, ...)
 	puts( buffer );
 	abort();
 #else
-	env_t::verbose_debug = 0; // no more window concerning messages
+
+	env_t::verbose_debug = log_t::LEVEL_FATAL; // no more window concerning messages
+
 	if(is_display_init()) {
 		// show notification
 		destroy_all_win( true );
@@ -330,7 +338,7 @@ void log_t::fatal(const char *who, const char *format, ...)
 
 void log_t::vmessage(const char *what, const char *who, const char *format, va_list args )
 {
-	if(debuglevel>=1) {
+	if(debuglevel >= LEVEL_ERROR) {
 		va_list args2;
 
 #if defined(va_copy)
@@ -363,14 +371,16 @@ void log_t::vmessage(const char *what, const char *who, const char *format, va_l
 
 
 // create a logfile for log_debug=true
-log_t::log_t( const char *logfilename, bool force_flush, bool log_debug, bool log_console, const char *greeting, const char* syslogtag )
+log_t::log_t( const char *logfilename, bool force_flush, bool log_debug, bool log_console, const char *greeting, const char* syslogtag ) :
+	log(NULL),
+	tee(NULL),
+	force_flush(force_flush), // if true will always flush when an entry is written to the log
+	log_debug(log_debug),
+	tag(NULL)
+#ifdef SYSLOG
+	, syslog(false)
+#endif
 {
-	log = NULL;
-	syslog = false;
-	this->force_flush = force_flush; /* if true will always flush when */
-	                                 /* an entry is written to the log */
-	this->log_debug = log_debug;
-
 	if(logfilename == NULL) {
 		log = NULL;                       /* not a log */
 		tee = NULL;

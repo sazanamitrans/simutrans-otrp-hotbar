@@ -73,20 +73,6 @@ const translator::lang_info* translator::get_langs()
 }
 
 
-#ifdef need_dump_hashtable
-// diagnosis
-static void dump_hashtable(stringhashtable_tpl<const char*>* tbl)
-{
-	printf("keys\n====\n");
-	tbl->dump_stats();
-	printf("entries\n=======\n");
-	FOR(stringhashtable_tpl<char const*>, const& i, *tbl) {
-		printf("%s\n", i.object);
-	}
-	fflush(NULL);
-}
-#endif
-
 /* first two file functions needed in connection with utf */
 
 /**
@@ -123,10 +109,6 @@ static bool is_unicode_file(FILE* f)
 
 
 
-// the bytes in an UTF sequence have always the format 10xxxxxx
-static inline int is_cont_char(utf8 c) { return (c & 0xC0) == 0x80; }
-
-
 // recodes string to put them into the tables
 static char *recode(const char *src, bool translate_from_utf, bool translate_to_utf, bool is_latin2 )
 {
@@ -143,7 +125,12 @@ static char *recode(const char *src, bool translate_from_utf, bool translate_to_
 
 	do {
 		if (*src =='\\') {
-			src +=2;
+			if (*(src + 1) == 0) {
+				// backslash at end of line -> corrupted
+				break;
+			}
+
+			src += 2;
 			*dst++ = c = '\n';
 		}
 		else {
@@ -342,7 +329,7 @@ static void load_language_file_body(FILE* file, stringhashtable_tpl<const char*>
 
 void translator::load_language_file(FILE* file)
 {
-	char buffer1 [256];
+	char buffer1[256];
 	bool file_is_utf = is_unicode_file(file);
 
 	// Read language name
@@ -360,9 +347,9 @@ void translator::load_language_file(FILE* file)
 			if(  strcmp(buffer1,"PROP_FONT_FILE") == 0  ) {
 				fgets_line( buffer1, sizeof(buffer1), file );
 				// HACK: so we guess about latin2 from the font name!
-				langs[single_instance.lang_count].is_latin2_based = strcmp( buffer1, "prop-latin2.fnt" ) == 0;
+				langs[single_instance.lang_count].is_latin2_based = STRNICMP( buffer1+5, "latin2", 6 )==0;
 				// we must register now a unicode font
-				langs[single_instance.lang_count].texts.set( "PROP_FONT_FILE", "cyr.bdf" );
+				langs[single_instance.lang_count].texts.set( "PROP_FONT_FILE", langs[single_instance.lang_count].is_latin2_based ? "cyr.bdf" : strdup(buffer1) );
 				break;
 			}
 		}
@@ -497,10 +484,6 @@ bool translator::load(const string &path_to_pakset)
 		dr_chdir( env_t::data_dir );
 	}
 
-#if DEBUG>=4
-	dump_hashtable(&compatibility);
-#endif
-
 	// use english if available
 	current_langinfo = get_lang_by_iso("en");
 
@@ -559,6 +542,10 @@ void translator::set_language(const char *iso)
 			set_language(i);
 			return;
 		}
+	}
+	// if the request language does not exist
+	if( single_instance.current_lang == -1 ) {
+		set_language(0);
 	}
 }
 

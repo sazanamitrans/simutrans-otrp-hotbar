@@ -44,8 +44,14 @@ class road_connector_t extends manager_t
 		local fd = fdest.get_tile_list()
 
 		if ( check_factory_links(fsrc, fdest, freight) >= 2 && phase == 0 ) {
-			gui.add_message_at(pl, "no build line from " + fsrc.get_name() + " (" + coord_to_string(fs[0]) + ") to " + fdest.get_name() + " (" + coord_to_string(fd[0]) + ") to many links", world.get_time())
-			return r_t(RT_TOTAL_FAIL)
+			//gui.add_message_at(pl, "no build line from " + fsrc.get_name() + " (" + coord_to_string(fs[0]) + ") to " + fdest.get_name() + " (" + coord_to_string(fd[0]) + ") to many links", world.get_time())
+			return r_t(RT_TOTAL_FAIL) //
+		} else {
+			//gui.add_message_at(pl, "check line from " + fsrc.get_name() + " (" + coord_to_string(fs[0]) + ") to " + fdest.get_name() + " (" + coord_to_string(fd[0]) + ") " + freight, world.get_time())
+			local st_dock = search_station(c_start, wt_water, 1)
+			if ( !check_factory_link_line(fsrc, fdest, freight) && !st_dock ) {
+				return r_t(RT_TOTAL_FAIL)
+			}
 		}
 
 		switch(phase) {
@@ -72,6 +78,55 @@ class road_connector_t extends manager_t
 				{
 					sleep()
 					local d = pl.get_current_cash();
+
+					// test route for calculate cost
+					local calc_route = test_route(our_player, c_start, c_end, planned_way)
+					//gui.add_message_at(our_player, "distance " + distance, world.get_time())
+					if ( calc_route == "No route" ) {
+						return error_handler()
+					}
+					//gui.add_message_at(our_player, "calc route " + coord3d_to_string(c_start[0]) +  " to " + coord3d_to_string(c_end[0]) + ": way tiles = " + calc_route.routes.len() + " bridge tiles = " + calc_route.bridge_lens + " tree tiles = " + calc_route.tiles_tree, world.get_time())
+
+					sleep()
+					local build_cost = (calc_route.routes.len() * planned_way.get_cost()) + (planned_station.get_cost()*2) + planned_depot.get_cost() + (calc_route.bridge_lens * calc_route.bridge_obj.get_cost())
+					local cost_monthly = (calc_route.routes.len() * planned_way.get_maintenance()) + (planned_station.get_maintenance()*2) + planned_depot.get_maintenance() + (calc_route.bridge_lens * calc_route.bridge_obj.get_maintenance())
+					build_cost = build_cost/100
+
+					build_cost = build_cost + (calc_route.tiles_tree * (tree_desc_x.get_price()/100))
+
+					//gui.add_message_at(pl, "tree remove cost: " + tree_desc_x.get_price(), world.get_time())
+
+					//gui.add_message_at(pl, "cash: " + pl.get_current_cash() + " build cost: " + build_cost + " montly cost: " + (cost_monthly/100), world.get_time())
+					cost_monthly = (cost_monthly/100)+(pl.get_current_maintenance()/100)
+					//gui.add_message_at(pl, "cash: " + pl.get_current_cash() + " current maintenance: " + pl.get_current_maintenance(), world.get_time())
+					//gui.add_message_at(pl, " montly cost new: " + cost_monthly, world.get_time())
+
+					sleep()
+					// if combined station from ship
+					local cash = pl.get_current_cash()
+					local st_dock = search_station(calc_route.routes[calc_route.routes.len()-1], wt_water, 1)
+					if ( st_dock ) {
+						local st = halt_x.get_halt(st_dock[0], our_player)
+						if ( st ) {
+							local fl_st = st.get_factory_list()
+							if ( fl_st.len() == 0 ) {
+								cash = our_player.get_current_net_wealth()
+								//gui.add_message_at(our_player, "combined station -> get_current_net_wealth() " + our_player.get_current_net_wealth(), world.get_time())
+							} else {
+
+							}
+						}
+					}
+
+					if ( (cash-build_cost) < (cost_monthly*4) ) {
+						//gui.add_message_at(pl, "Way construction cost to height: cash: " + pl.get_current_cash() + " build cost: " + build_cost, world.get_time())
+						return error_handler()
+					}
+
+					if ( !planned_way.is_available(world.get_time()) ) {
+						planned_way = find_object("way", wt_road, planned_way.get_topspeed())
+					}
+
 					local err = construct_road(pl, c_start, c_end, planned_way )
 					print("Way construction cost: " + (d-pl.get_current_cash()) )
 					if (err && c_start.len()>0  &&  c_end.len()>0) {
@@ -150,7 +205,8 @@ class road_connector_t extends manager_t
 						err = command_x.build_road(pl, starts_field, c_depot, planned_way, false, true)
 						//err = construct_road(our_player, station_to_depot, c_depot, planned_way)
 					} else {
-						local i = c_route.len() - 5
+						local i = c_route.len()-1
+						if ( i > 4 ) { i -= 4 }
 						local err = construct_road_to_depot(pl, c_route[i], planned_way) //c_start
 						if (err) {
 							print("Failed to build depot access from " + coord_to_string(c_start))
@@ -225,7 +281,18 @@ class road_connector_t extends manager_t
 					// optimize way line save in c_route
 					if ( tile_x(c_start.x, c_start.y, c_start.z).find_object(mo_building) != null && tile_x(c_end.x, c_end.y, c_end.z).find_object(mo_building) != null && c_route.len() > 0 ) {
 						// tile c_start ans c_end have station
-						optimize_way_line(c_route, wt_road)
+						if (our_player.get_current_cash() > 50000) {
+							//optimize_way_line(c_route, wt_road)
+						}
+
+						// rename line
+						local line_name = c_line.get_name()
+						local str_search = ") " + translate("Line")
+						local st_names = c_line.get_schedule().entries
+						if ( line_name.find(str_search) != null ) {
+							local new_name = translate("road") + " " + translate(freight) + " " + st_names[0].get_halt(pl).get_name() + " - " + st_names[1].get_halt(pl).get_name()
+							c_line.set_name(new_name)
+						}
 					}
 				}
 		}
@@ -262,7 +329,9 @@ class road_connector_t extends manager_t
 				f_name[1] = "station"
 			}
 		}
-		gui.add_message_at(pl, pl.get_name() + " build road line from " + f_name[0] + " (" + coord_to_string(cs) + ") to " + f_name[1] + " (" + coord_to_string(ce) + ")", c_start)
+		local msgtext = format(translate("%s build road line from %s (%s) to %s (%s)"), pl.get_name(), f_name[0], coord_to_string(cs), f_name[1], coord_to_string(ce))
+		//gui.add_message_at(pl, pl.get_name() + " build road line from " + f_name[0] + " (" + coord_to_string(cs) + ") to " + f_name[1] + " (" + coord_to_string(ce) + ")", c_start)
+		gui.add_message_at(pl, msgtext, c_start)
 
 		return r_t(RT_TOTAL_SUCCESS)
 	}

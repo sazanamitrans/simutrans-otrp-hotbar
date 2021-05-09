@@ -7,6 +7,7 @@
 
 #include "../dataobj/loadsave.h"
 #include "../dataobj/environment.h"
+#include "../dataobj/translator.h"
 #include "../gui/simwin.h"
 #include "../gui/player_frame_t.h"
 
@@ -49,6 +50,9 @@ const char* ai_scripted_t::init( const char *ai_base, const char *ai_name_)
 		script = NULL;
 		return "Loading ai script failed";
 	}
+
+	// load translations
+	translator::load_files_from_folder( ai_path.c_str(), "scenario" );
 
 	// set the standard name
 	buf.clear();
@@ -190,6 +194,10 @@ void repair_table_keys(plainstring &str)
 		else if (first_digit == NULL  &&  *p != ' '  &&  *p != '\t') {
 			first_digit = line;
 		}
+		// some keys contained broken umlauts
+		if (equal == NULL  &&  *p < 0) {
+			*p = '_';
+		}
 		p++;
 	}
 }
@@ -212,7 +220,7 @@ void ai_scripted_t::rdwr(loadsave_t *file)
 		// load persistent data
 		plainstring str;
 		file->rdwr_str(str);
-		dbg->warning("ai_scripted_t::rdwr", "loaded persistent ai data: %s", str.c_str());
+		dbg->message("ai_scripted_t::rdwr", "loaded persistent ai data: %s", str.c_str());
 
 		if (env_t::networkmode  &&  !env_t::server) {
 			// scripted players run on server only, for now at least
@@ -242,7 +250,7 @@ void ai_scripted_t::rdwr(loadsave_t *file)
 			// restore persistent data
 			const char* err = script->eval_string(str);
 			if (err  &&  strcmp(err, "Error compiling string buffer")==0) {
-				// sqai produced invalid table keys up to r9007
+				// sqai produced invalid table keys up to r9007 (and later as well... )
 				repair_table_keys(str);
 				dbg->warning("ai_scripted_t::rdwr", "repaired persistent ai data: %s", str.c_str());
 				// close error message

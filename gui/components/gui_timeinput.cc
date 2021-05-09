@@ -12,146 +12,93 @@
 #include "../../utils/simstring.h"
 #include "../../simintr.h"
 #include "../../simworld.h"
+#include "../../dataobj/environment.h"
 
 
-scr_coord_val gui_timeinput_t::text_width;
-
-
-gui_timeinput_t::gui_timeinput_t(const char *null_text_) :
-	gui_component_t(true),
-	null_text(null_text_)
+gui_timeinput_t::gui_timeinput_t(const char *)
 {
-	text_width = proportional_string_width("+30 23:55h");
+	const int max_days = env_t::show_month == env_t::DATE_FMT_MONTH ? 3 : 31;
+	const scr_coord_val min_button_width = D_ARROW_LEFT_WIDTH + D_ARROW_RIGHT_WIDTH + 3 * D_H_SPACE + proportional_string_width("30");
 
-	set_ticks( 0 );
-	repeat_steps = 0;
+	set_table_layout(4, 1);
+	set_alignment(ALIGN_LEFT | ALIGN_TOP);
+	set_margin(scr_size(D_H_SPACE, 0), scr_size(D_H_SPACE, 0));
 
-	bt_left.set_typ(button_t::repeatarrowleft );
-	bt_left.set_pos( scr_coord(0,0) );
+	days.init(0, 0, max_days);
+	days.add_listener(this);
+	days.set_size(scr_size(min_button_width, D_EDIT_HEIGHT));
+	add_component(&days);
 
-	time_out.set_color( SYSCOL_EDIT_TEXT );
-	time_out.set_text_pointer( textbuffer );
-	time_out.set_align( gui_label_t::centered );
+	hours.init(0, 0, 23);
+	hours.set_size(scr_size(min_button_width, D_EDIT_HEIGHT));
+	hours.add_listener(this);
+	add_component(&hours);
 
-	bt_right.set_typ(button_t::repeatarrowright );
+	new_component<gui_label_t>(":");
+
+	minutes.init(0, 0, 59);
+	minutes.set_size(scr_size(min_button_width, D_EDIT_HEIGHT));
+	minutes.add_listener(this);
+	add_component(&minutes);
 
 	b_enabled = true;
-
-	set_size( scr_size(0,0) );
-}
-
-
-void gui_timeinput_t::set_size(scr_size size_par)
-{
-	bt_left.set_pos( scr_coord(0,(size.h-D_ARROW_LEFT_HEIGHT)/2) );
-	time_out.set_size( scr_size(text_width+1,LINESPACE) );
-	time_out.align_to( &bt_left, ALIGN_LEFT | ALIGN_EXTERIOR_H | ALIGN_CENTER_V, scr_coord( D_H_SPACE, 0) );
-	bt_right.align_to( &bt_left, ALIGN_LEFT | ALIGN_EXTERIOR_H, scr_coord( D_H_SPACE*2+text_width, 0) );
-
-	size_par.w = min( D_ARROW_LEFT_WIDTH + D_ARROW_RIGHT_WIDTH + 2 * D_H_SPACE + text_width, size_par.w );
-	size_par.h = min( max(D_ARROW_LEFT_HEIGHT,LINESPACE), size_par.h );
-
-	gui_component_t::set_size(size_par);
-}
-
-
-scr_size gui_timeinput_t::get_max_size() const
-{
-	return get_min_size();
 }
 
 
 scr_size gui_timeinput_t::get_min_size() const
 {
-	return scr_size(  text_width + D_ARROW_LEFT_WIDTH + D_ARROW_RIGHT_WIDTH + D_H_SPACE*2,
-		max(LINESPACE, max(D_ARROW_LEFT_HEIGHT, D_ARROW_RIGHT_HEIGHT)) );
+	const int min_button_width = D_ARROW_LEFT_WIDTH + D_ARROW_RIGHT_WIDTH + 2 * D_H_SPACE + proportional_string_width("30");
+	return scr_size(3 * min_button_width + 2 * D_H_SPACE, D_EDIT_HEIGHT);
 }
 
 
-void gui_timeinput_t::set_ticks( uint16 new_ticks )
+sint32 gui_timeinput_t::get_ticks()
 {
-	sint32 disp_ticks = (world()->ticks_per_world_month_shift >= 16) ? (new_ticks << (world()->ticks_per_world_month_shift - 16)) : (new_ticks >> (16 - world()->ticks_per_world_month_shift));
-
-	if(  disp_ticks == 0  &&  null_text  ) {
-		tstrncpy( textbuffer, translator::translate(null_text), lengthof(textbuffer) );
+	sint32 dms = days.get_value() * 24 * 60 + hours.get_value() * 60 + minutes.get_value();
+	if (dms == 0) {
+		return 0;
 	}
-	else {
-		tstrncpy( textbuffer, difftick_to_string( disp_ticks, false ), lengthof(textbuffer) );
+	if (env_t::show_month == env_t::DATE_FMT_MONTH) {
+		return (dms * 65536u) / (3 * 24 * 60)+1;
 	}
-
-	time_out.set_color( b_enabled ? SYSCOL_EDIT_TEXT : SYSCOL_EDIT_TEXT_DISABLED );
-	ticks = new_ticks;
+	return (dms * 65536u) / (31 * 24 * 60)+1;
 }
 
 
-bool gui_timeinput_t::infowin_event(const event_t *ev)
+
+void gui_timeinput_t::set_ticks(uint16 t)
 {
-	if( ev->ev_class == EVENT_RELEASE ) {
-		repeat_steps = 0;
-	}
+	sint32 ticks = t;
+	// this is actually ticks*daylength*24*60/65536 but to avoid overflow the factor 32 was removed from both)
+	sint32 new_dms = (ticks * (env_t::show_month == env_t::DATE_FMT_MONTH ? 3 : 31) * 3 * 15) / (2048);
 
-	// buttons pressed
-	sint32 increment = 0;
-	if(  bt_left.getroffen(ev->cx, ev->cy)  &&  ev->ev_code == MOUSE_LEFTBUTTON  ) {
-		increment = -1;
-	}
-	else if(  bt_right.getroffen(ev->cx, ev->cy)  &&  ev->ev_code == MOUSE_LEFTBUTTON  ) {
-		increment = 1;
-	}
+	days.set_value(new_dms / (24 * 60));
+	hours.set_value((new_dms / 60) % 24);
+	minutes.set_value(new_dms % 60);
+}
 
-	// something changed?
-	if( increment != 0 ) {
-		if( ev->ev_class == EVENT_REPEAT ) {
-			repeat_steps++;
-		}
-		if( repeat_steps >= 75 ) {
-			increment *= 1000;
-		}
-		else if( repeat_steps >= 60 ) {
-			increment *= 240;
-		}
-		else if( repeat_steps >= 45 ) {
-			increment *= 60;
-		}
-		else if( repeat_steps >= 30 ) {
-			increment *= 15;
-		}
-		else if( repeat_steps >= 15 ) {
-			increment *= 5;
-		}
-		set_ticks( ticks + world()->ticks_per_world_month + increment );
-		value_t v( ticks );
-		call_listeners( v );
-		return true;
-	}
 
+
+bool gui_timeinput_t::action_triggered(gui_action_creator_t*, value_t)
+{
+	uint16 t = get_ticks();
+	call_listeners(t);
 	return false;
 }
 
 
 void gui_timeinput_t::draw(scr_coord offset)
 {
-	scr_coord new_offset = pos+offset;
-
-	bt_left.draw(new_offset);
-	time_out.draw(new_offset);
-	bt_right.draw(new_offset);
-	
+	gui_aligned_container_t::draw(offset);
 	if(b_enabled  &&  getroffen( get_mouse_x()-offset.x, get_mouse_y()-offset.y )) {
-		win_set_tooltip(get_mouse_x() + TOOLTIP_MOUSE_OFFSET_X, new_offset.y + size.h + TOOLTIP_MOUSE_OFFSET_Y, translator::translate("Enter intervall in days, hours minutes" ), this);
+		win_set_tooltip(get_mouse_x() + TOOLTIP_MOUSE_OFFSET_X,get_mouse_y() + TOOLTIP_MOUSE_OFFSET_Y, translator::translate("Enter intervall in days, hours minutes" ), this);
 	}
 }
 
 
-bool gui_timeinput_t::compare( const gui_component_t *a, const gui_component_t *b )
-{
-	return dynamic_cast<const gui_timeinput_t *>(a)->get_ticks() < dynamic_cast<const gui_timeinput_t *>(b)->get_ticks();
-}
-
-
-
 void gui_timeinput_t::rdwr( loadsave_t *file )
 {
-	file->rdwr_short( ticks );
-	set_ticks( ticks );
+	uint16 ticks=get_ticks();
+	file->rdwr_short(ticks);
+	set_ticks(ticks);
 }

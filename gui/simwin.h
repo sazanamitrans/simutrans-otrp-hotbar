@@ -104,6 +104,8 @@ enum magic_numbers {
 	magic_motd,
 	magic_factory_info, // only used to load/save
 	magic_font,
+	magic_soundfont, // only with USE_FLUIDSYNTH_MIDI
+	magic_edit_groundobj,
 
 	// magic numbers with big jumps between them
 	magic_convoi_info,
@@ -122,8 +124,6 @@ enum magic_numbers {
 
 // Holding time for auto-closing windows
 #define MESG_WAIT 80
-
-void init_map_win();
 
 // windows with a valid id can be saved and restored
 void rdwr_all_win(loadsave_t *file);
@@ -147,7 +147,12 @@ gui_frame_t *win_get_top();
 // returns the focused component of the top window
 gui_component_t *win_get_focus();
 
-int win_get_open_count();
+// true, if the focus is currently in a text field
+bool win_is_textinput();
+
+uint32 win_get_open_count();
+
+gui_frame_t* win_get_index(uint32 i);
 
 // returns the window (if open) otherwise zero
 gui_frame_t *win_get_magic(ptrdiff_t magic);

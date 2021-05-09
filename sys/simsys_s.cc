@@ -12,7 +12,6 @@
 #include <stdio.h>
 
 #include "simsys.h"
-#include "simsys_w32_png.h"
 
 #include "../macros.h"
 #include "../simversion.h"
@@ -144,7 +143,7 @@ bool dr_auto_scale(bool)
 bool dr_os_init(const int* parameter)
 {
 	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_NOPARACHUTE) != 0) {
-		fprintf(stderr, "Couldn't initialize SDL: %s\n", SDL_GetError());
+		dbg->error("dr_os_init(SDL)", "Couldn't initialize SDL: %s", SDL_GetError());
 		return false;
 	}
 
@@ -203,7 +202,7 @@ int dr_os_open(int w, int const h, bool fullscreen)
 
 	redraw_param.ready = false;
 	if(  pthread_create( &(redraw_param.thread), &attr, redraw_thread, (void*)&redraw_param )  ) {
-		fprintf(stderr, "dr_os_open(): cannot multithread\n");
+		dbg->error("dr_os_open(SDL)", "pthread_create failed, cannot multithread.");
 		return 0;
 	}
 
@@ -232,17 +231,16 @@ int dr_os_open(int w, int const h, bool fullscreen)
 	screen = SDL_SetVideoMode( w, h, COLOUR_DEPTH, flags );
 	SDL_putenv("SDL_VIDEO_CENTERED="); // clear flag so it doesn't continually recenter upon resizing the window
 	if(  screen == NULL  ) {
-		fprintf(stderr, "Couldn't open the window: %s\n", SDL_GetError());
+		dbg->error("dr_os_open(SDL)", "Couldn't open the window: %s", SDL_GetError());
 		return 0;
 	}
-	else {
-		const SDL_VideoInfo* vi = SDL_GetVideoInfo();
-		char driver_name[128];
-		SDL_VideoDriverName( driver_name, lengthof(driver_name) );
-		fprintf(stderr, "SDL_driver=%s, hw_available=%i, video_mem=%i, blit_sw=%i, bpp=%i, bytes=%i\n", driver_name, vi->hw_available, vi->video_mem, vi->blit_sw, vi->vfmt->BitsPerPixel, vi->vfmt->BytesPerPixel );
-		fprintf(stderr, "Screen Flags: requested=%x, actual=%x\n", flags, screen->flags );
-	}
-	printf("dr_os_open(SDL): SDL realized screen size width=%d, height=%d (requested w=%d, h=%d)\n", screen->w, screen->h, w, h );
+
+	const SDL_VideoInfo* vi = SDL_GetVideoInfo();
+	char driver_name[128];
+	SDL_VideoDriverName( driver_name, lengthof(driver_name) );
+	dbg->debug("dr_os_open(SDL)", "SDL_driver=%s, hw_available=%i, video_mem=%i, blit_sw=%i, bpp=%i, bytes=%i\n", driver_name, vi->hw_available, vi->video_mem, vi->blit_sw, vi->vfmt->BitsPerPixel, vi->vfmt->BytesPerPixel );
+	dbg->debug("dr_os_open(SDL)", "Screen Flags: requested=%x, actual=%x\n", flags, screen->flags );
+	dbg->debug("dr_os_open(SDL)", "SDL realized screen size width=%d, height=%d (requested w=%d, h=%d)\n", screen->w, screen->h, w, h );
 
 	SDL_EnableUNICODE(true);
 	SDL_EnableKeyRepeat(SDL_DEFAULT_REPEAT_DELAY, SDL_DEFAULT_REPEAT_INTERVAL);
@@ -303,21 +301,22 @@ int dr_textur_resize(unsigned short** const textur, int w, int const h)
 		height = h;
 
 		screen = SDL_SetVideoMode(w, h, COLOUR_DEPTH, flags);
-		printf("textur_resize()::screen=%p\n", screen);
+
 		if (screen) {
 			DBG_MESSAGE("dr_textur_resize(SDL)", "SDL realized screen size width=%d, height=%d (requested w=%d, h=%d)", screen->w, screen->h, w, h);
 		}
-		else {
-			if (dbg) {
-				dbg->warning("dr_textur_resize(SDL)", "screen is NULL. Good luck!");
-			}
+		else if (dbg) {
+			dbg->error("dr_textur_resize(SDL)", "screen is NULL. Good luck!");
 		}
 		fflush(NULL);
 	}
+
 	*textur = (unsigned short*)screen->pixels;
+
 #ifdef MULTI_THREAD
 	pthread_mutex_unlock( &redraw_mutex );
 #endif
+
 	return w;
 }
 
@@ -420,23 +419,6 @@ void move_pointer(int x, int y)
 void set_pointer(int loading)
 {
 	SDL_SetCursor(loading ? hourglass : arrow);
-}
-
-
-/**
- * Some wrappers can save screenshots.
- * @return 1 on success, 0 if not implemented for a particular wrapper and -1
- *         in case of error.
- */
-int dr_screenshot(const char *filename, int x, int y, int w, int h)
-{
-#ifdef WIN32
-	if(  dr_screenshot_png(filename, w, h, width, ((unsigned short *)(screen->pixels))+x+y*width, screen->format->BitsPerPixel )  ) {
-		return 1;
-	}
-#endif
-	(void)(x+y+w+h);
-	return SDL_SaveBMP(SDL_GetVideoSurface(), filename) == 0 ? 1 : -1;
 }
 
 

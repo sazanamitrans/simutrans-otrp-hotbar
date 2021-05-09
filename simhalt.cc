@@ -2493,6 +2493,7 @@ void haltestelle_t::change_owner( player_t *player )
 	owner = player;
 	rebuild_connections();
 	rebuild_linked_connections();
+	rebuild_connected_components();
 
 	// tell the world of it ...
 	if(  player == welt->get_public_player()  &&  env_t::networkmode  ) {
@@ -2547,6 +2548,7 @@ void haltestelle_t::merge_halt( halthandle_t halt_merged )
 	recalc_station_type();
 	rebuild_connections();
 	rebuild_linked_connections();
+	rebuild_connected_components();
 }
 
 
@@ -3054,7 +3056,7 @@ void haltestelle_t::recalc_status()
 /**
  * Draws some nice colored bars giving some status information
  */
-void haltestelle_t::display_status(KOORD_VAL xpos, KOORD_VAL ypos)
+void haltestelle_t::display_status(sint16 xpos, sint16 ypos)
 {
 	// ignore freight that cannot reach to this station
 	sint16 count = 0;
@@ -3068,13 +3070,13 @@ void haltestelle_t::display_status(KOORD_VAL xpos, KOORD_VAL ypos)
 	}
 	if(  count != last_bar_count  ) {
 		// bars will shift x positions, mark entire station bar region dirty
-		KOORD_VAL max_bar_height = 0;
+		scr_coord_val max_bar_height = 0;
 		for(  sint16 i = 0;  i < last_bar_count;  i++  ) {
 			if(  last_bar_height[i] > max_bar_height  ) {
 				max_bar_height = last_bar_height[i];
 			}
 		}
-		const KOORD_VAL x = xpos - (last_bar_count * D_WAITINGBAR_WIDTH - get_tile_raster_width()) / 2;
+		const scr_coord_val x = xpos - (last_bar_count * D_WAITINGBAR_WIDTH - get_tile_raster_width()) / 2;
 		mark_rect_dirty_wc( x - 1 - D_WAITINGBAR_WIDTH, ypos - 11 - max_bar_height - 6, x + last_bar_count * D_WAITINGBAR_WIDTH + 12 - 2, ypos - 11 );
 
 		// reset bar heights for new count
@@ -3088,7 +3090,7 @@ void haltestelle_t::display_status(KOORD_VAL xpos, KOORD_VAL ypos)
 
 	ypos -= D_LABEL_HEIGHT/2 +D_WAITINGBAR_WIDTH;
 	xpos -= (count * D_WAITINGBAR_WIDTH - get_tile_raster_width()) / 2;
-	const KOORD_VAL x = xpos;
+	const int x = xpos;
 
 	sint16 bar_height_index = 0;
 	uint32 max_capacity;
@@ -3124,8 +3126,8 @@ void haltestelle_t::display_status(KOORD_VAL xpos, KOORD_VAL ypos)
 				v += 5; // for marking dirty
 			}
 
-			if(  last_bar_height[bar_height_index] != (KOORD_VAL)v  ) {
-				if(  (KOORD_VAL)v > last_bar_height[bar_height_index]  ) {
+			if(  last_bar_height[bar_height_index] != (scr_coord_val)v  ) {
+				if(  (scr_coord_val)v > last_bar_height[bar_height_index]  ) {
 					// bar will be longer, mark new height dirty
 					mark_rect_dirty_wc( xpos, ypos - v - 1, xpos + D_WAITINGBAR_WIDTH, ypos - 1 );
 				}

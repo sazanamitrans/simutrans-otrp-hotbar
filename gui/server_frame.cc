@@ -60,6 +60,7 @@ public:
 server_frame_t::server_frame_t() :
 	gui_frame_t( translator::translate("Game info") ),
 	gi(welt),
+	custom_valid(false),
 	serverlist( gui_scrolled_list_t::listskin, gui_scrolled_list_t::scrollitem_t::compare ),
 	game_text(&buf)
 {
@@ -419,7 +420,7 @@ bool server_frame_t::action_triggered (gui_action_creator_t *comp, value_t p)
 				}
 				else {
 					item->set_color( MONEY_MINUS );
-					update_error( "Server did not respond!" );
+					update_error( err );
 				}
 				display_show_load_pointer(0);
 			}
