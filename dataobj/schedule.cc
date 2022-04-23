@@ -38,7 +38,6 @@ void schedule_t::copy_from(const schedule_t *src)
 	// make sure, we can access both
 	if(  src==NULL  ) {
 		dbg->fatal("schedule_t::copy_to()","cannot copy from NULL");
-		return;
 	}
 	entries.clear();
 	FOR(minivec_tpl<schedule_entry_t>, const& i, src->entries) {
@@ -540,8 +539,12 @@ void construct_schedule_entry_attributes(cbuffer_t& buf, schedule_entry_t const&
 		str[cnt] = 'A';
 		cnt++;
 	}
-	if(  flag&schedule_entry_t::WAIT_FOR_TIME  &&  flag&schedule_entry_t::LOAD_BEFORE_DEP  ) {
+	if(  (flag&schedule_entry_t::WAIT_FOR_TIME  ||  entry.waiting_time_shift > 0)  &&  flag&schedule_entry_t::LOAD_BEFORE_DEP  ) {
 		str[cnt] = 'B';
+		cnt++;
+	}
+	if(  flag&schedule_entry_t::TRANSFER_INTERVAL  ) {
+		str[cnt] = 'I';
 		cnt++;
 	}
 	// there are at least one attributes.
@@ -663,4 +666,31 @@ uint8 schedule_t::get_current_stop_exluding_depot() const {
 		}
 	}
 	return idx;
+}
+
+
+void schedule_t::get_schedule_flag_text(cbuffer_t& buf, schedule_t* schedule)
+{
+	uint8 cnt = 1;
+	char str[10];
+	str[0] = '[';
+	const uint8 flag = schedule->get_flags();
+	if(  flag & schedule_t::TEMPORARY  ) {
+		str[cnt] = 'T';
+		cnt++;
+	}
+	if(  flag & schedule_t::FULL_LOAD_ACCELERATION  ) {
+		str[cnt] = 'R';
+		cnt++;
+	}
+	if(  flag & schedule_t::FULL_LOAD_TIME  ) {
+		str[cnt] = 'G';
+		cnt++;
+	}
+	if(  cnt>1  ) {
+		str[cnt] = ']';
+		str[cnt+1] = ' ';
+		str[cnt+2] = '\0';
+		buf.append(str);
+	}
 }

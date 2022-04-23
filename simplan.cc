@@ -4,7 +4,7 @@
  */
 
 #include "simdebug.h"
-#include "simobj.h"
+#include "obj/simobj.h"
 #include "simfab.h"
 #include "display/simgraph.h"
 #include "simmenu.h"
@@ -367,7 +367,7 @@ void planquadrat_t::abgesenkt()
 			kartenboden_setzen( gr );
 			// recalc water ribis of neighbors
 			for(int r=0; r<4; r++) {
-				grund_t *gr2 = welt->lookup_kartenboden(k + koord::nsew[r]);
+				grund_t *gr2 = welt->lookup_kartenboden(k + koord::nesw[r]);
 				if (gr2  &&  gr2->is_water()) {
 					gr2->calc_image();
 				}
@@ -396,7 +396,7 @@ void planquadrat_t::angehoben()
 			kartenboden_setzen( gr );
 			// recalc water ribis
 			for(int r=0; r<4; r++) {
-				grund_t *gr2 = welt->lookup_kartenboden(k + koord::nsew[r]);
+				grund_t *gr2 = welt->lookup_kartenboden(k + koord::nesw[r]);
 				if(  gr2  &&  gr2->is_water()  ) {
 					gr2->calc_image();
 				}
@@ -408,7 +408,7 @@ void planquadrat_t::angehoben()
 			kartenboden_setzen( gr );
 			// recalc water ribis
 			for(int r=0; r<4; r++) {
-				grund_t *gr2 = welt->lookup_kartenboden(k + koord::nsew[r]);
+				grund_t *gr2 = welt->lookup_kartenboden(k + koord::nesw[r]);
 				if(  gr2  &&  gr2->is_water()  ) {
 					gr2->calc_image();
 				}
@@ -478,7 +478,7 @@ void planquadrat_t::display_obj(const sint16 xpos, const sint16 ypos, const sint
 				// not too low?
 				if(  htop >= hmin  ) {
 					// something on top: clip horizontally to prevent trees etc shining trough bridges
-					const sint16 yh = ypos - tile_raster_scale_y( (h - h0) * TILE_HEIGHT_STEP, raster_tile_width ) + ((3 * raster_tile_width) >> 2);
+					const sint16 yh = ypos - tile_raster_scale_y( (h + corner_nw(data.some[j]->get_grund_hang()) - h0) * TILE_HEIGHT_STEP, raster_tile_width ) + ((3 * raster_tile_width) >> 2);
 					if(  yh >= p_cr.y  ) {
 						display_push_clip_wh(p_cr.x, yh, p_cr.w, p_cr.h + p_cr.y - yh  CLIP_NUM_PAR  );
 					}

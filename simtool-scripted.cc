@@ -141,6 +141,13 @@ void exec_script_base_t::load_script(const char* path, player_t* player)
       script.reset();
 		}
 	}
+	// older versions did not support the flags parameter - correct with helper function
+	if (const char* err = script->call_function(script_vm_t::QUEUE, "correct_missing_flags_argument")) {
+		if (strcmp(err, "suspended")) {
+			dbg->error("tool_exec_script_t::load_script", "error [%s] calling correct_missing_flags_argument", err);
+			script.reset();
+		}
+	}
 }
 
 

@@ -16,6 +16,7 @@
 *.rej
 /simutrans/*pak*
 /simutrans/pak*
+/simutrans/PAK*
 /simutrans/text
 *.bdf
 *.zip
@@ -27,3 +28,8 @@
 *.patch
 *.log
 /doxygen
+.vs/
+revision.h
+.idea
+*.d
+*.res

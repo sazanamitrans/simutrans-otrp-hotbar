@@ -28,6 +28,7 @@ void gui_journey_time_stat_t::update(linehandle_t line, vector_tpl<uint32*>& jou
   schedule_t* schedule = line->get_schedule();
   scr_size size = get_size();
   remove_all();
+  uint32 journey_time_sum = 0;
   set_table_layout(NUM_ARRIVAL_TIME_STORED+2,0);
   uint8 depot_entry_count = 0;
   for(uint8 idx=0; idx<schedule->entries.get_count(); idx++) {
@@ -56,6 +57,10 @@ void gui_journey_time_stat_t::update(linehandle_t line, vector_tpl<uint32*>& jou
         lb->buf().printf("-");
       } else {
         lb->buf().printf("%d", t);
+        if(i == 0){
+          journey_time_sum += t;
+        }
+
       }
       lb->update();
       if(  t>0  &&  (sint32)t-(sint32)journey_times[idx][0]>4  ) {
@@ -67,6 +72,12 @@ void gui_journey_time_stat_t::update(linehandle_t line, vector_tpl<uint32*>& jou
       }
     }
   }
+  gui_label_buf_t *lb = new_component<gui_label_buf_t>(SYSCOL_TEXT, gui_label_t::left);
+  lb->buf().printf("Total");
+  lb->update();
+  lb = new_component<gui_label_buf_t>(SYSCOL_TEXT, gui_label_t::right);
+  lb->buf().printf("%d", journey_time_sum); 
+  lb->update();
   
   scr_size min_size = get_min_size();
 	set_size(scr_size(max(size.w, min_size.w), min_size.h) );

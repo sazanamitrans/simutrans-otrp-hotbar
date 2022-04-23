@@ -53,7 +53,15 @@ protected:
 
 public:
 	enum schedule_type {
-		schedule = 0, truck_schedule = 1, train_schedule = 2, ship_schedule = 3, airplane_schedule = 4, monorail_schedule = 5, tram_schedule = 6, maglev_schedule = 7, narrowgauge_schedule = 8,
+		schedule             = 0,
+		truck_schedule       = 1,
+		train_schedule       = 2,
+		ship_schedule        = 3,
+		airplane_schedule    = 4,
+		monorail_schedule    = 5,
+		tram_schedule        = 6,
+		maglev_schedule      = 7,
+		narrowgauge_schedule = 8
 	};
 	
 	enum {
@@ -61,6 +69,7 @@ public:
 		TEMPORARY              = 1U << 0, // This schedule is not used for goods routing.
 		SAME_DEP_TIME          = 1U << 1, // Use same departure time for all entries.
 		FULL_LOAD_ACCELERATION = 1U << 2, // Always use full load acceleration.
+		FULL_LOAD_TIME         = 1U << 3,
 	};
 
 	minivec_tpl<schedule_entry_t> entries;
@@ -124,6 +133,9 @@ public:
 	void set_full_load_acceleration(bool y) { y ? flags |= FULL_LOAD_ACCELERATION : flags &= ~FULL_LOAD_ACCELERATION; }
 	uint16 get_max_speed() const { return max_speed; }
 	void set_max_speed(uint16 v) { max_speed = v; }
+
+	bool is_full_load_time() const { return (flags&FULL_LOAD_TIME)>0; }
+	void set_full_load_time(bool y) { y ? flags |= FULL_LOAD_TIME : flags &= ~FULL_LOAD_TIME; }
 	
 	void set_spacing_for_all(uint16);
 	void set_spacing_shift_for_all(uint16);
@@ -207,6 +219,8 @@ public:
 	
 	// get current_stop excluding depot entries
 	uint8 get_current_stop_exluding_depot() const;
+
+	static void get_schedule_flag_text(cbuffer_t& buf, schedule_t* schedule);
 };
 
 

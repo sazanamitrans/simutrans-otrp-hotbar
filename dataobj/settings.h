@@ -11,6 +11,8 @@
 #include "../simtypes.h"
 #include "../simconst.h"
 
+#include "ribi.h"
+
 class player_t;
 class loadsave_t;
 class tabfile_t;
@@ -47,7 +49,11 @@ class settings_t
 	friend class welt_gui_t;
 
 public:
-	typedef enum { HEIGHT_BASED=0, HUMIDITY_BASED } climate_generate_t;
+	typedef enum {
+		HEIGHT_BASED = 0,
+		HUMIDITY_BASED,
+		MAP_BASED
+	} climate_generate_t;
 
 private:
 	sint32 size_x, size_y;
@@ -135,6 +141,8 @@ private:
 	sint8 tropic_humidity;
 	sint8 desert_humidity;
 
+	ribi_t::ribi wind_direction; ///< Wind is coming from this direction. Must be single! (N/W/S/E)
+
 	sint8 patch_size_percentage; // average size of a climate patch, if there are overlapping climates
 
 	sint8 moisture; // how much increase of moisture per tile
@@ -156,7 +164,17 @@ private:
 	uint8 max_no_of_trees_on_square;
 	uint16 tree_climates;
 	uint16 no_tree_climates;
-	uint16 tree;
+
+public:
+	enum tree_distribution_t
+	{
+		TREE_DIST_NONE     = 0,
+		TREE_DIST_RANDOM   = 1,
+		TREE_DIST_RAINFALL = 2,
+		TREE_DIST_COUNT
+	};
+private:
+	uint16 tree_distribution;
 
 	sint8 lake_height; //relative to sea height
 
@@ -311,6 +329,10 @@ private:
 	
 	bool first_come_first_serve;
 	
+	// When the amount of waiting goods/passengers exceeds this value,
+	// first_come_first_serve is no longer applied to reduce the calculation load.
+	uint32 waiting_limit_for_first_come_first_serve;
+	
 	// paramters for haltestelle_t::rebuild_connections()
 	uint8 routecost_halt;
 	uint8 routecost_wait;
@@ -391,7 +413,15 @@ public:
 	void copy_city_road(settings_t const& other);
 
 	// init from this file ...
-	void parse_simuconf( tabfile_t &simuconf, sint16 &disp_width, sint16 &disp_height, sint16 &fullscreen, std::string &objfilename );
+	void parse_simuconf(tabfile_t& simuconf, sint16& disp_width, sint16& disp_height, sint16& fullscreen, std::string& objfilename);
+
+	// init without screen parameters ...
+	void parse_simuconf(tabfile_t& simuconf) {
+		sint16 idummy = 0;
+		std::string sdummy;
+
+		parse_simuconf(simuconf, idummy, idummy, idummy, sdummy);
+	}
 
 	void parse_colours(tabfile_t& simuconf);
 
@@ -426,7 +456,7 @@ public:
 	sint8 get_maximumheight() const { return world_maximum_height; }
 	sint8 get_minimumheight() const { return world_minimum_height; }
 
-	sint16 get_groundwater() const {return groundwater;}
+	sint8 get_groundwater() const {return (sint8)groundwater;}
 
 	double get_max_mountain_height() const {return max_mountain_height;}
 
@@ -464,6 +494,7 @@ public:
 	void rotate90() {
 		rotation = (rotation+1)&3;
 		set_size( size_y, size_x );
+		wind_direction = ribi_t::rotate90(wind_direction);
 	}
 	uint8 get_rotation() const { return rotation; }
 
@@ -518,7 +549,11 @@ public:
 	bool is_separate_halt_capacities() const { return separate_halt_capacities ; }
 
 	// allowed modes are 0,1,2
-	enum { TO_PREVIOUS=0, TO_TRANSFER, TO_DESTINATION };
+	enum {
+		TO_PREVIOUS = 0,
+		TO_TRANSFER,
+		TO_DESTINATION
+	};
 	uint8 get_pay_for_total_distance_mode() const { return pay_for_total_distance ; }
 
 	// do not take people to overcrowded destinations
@@ -584,11 +619,11 @@ public:
 	uint8 get_max_no_of_trees_on_square() const { return max_no_of_trees_on_square; }
 	uint16 get_tree_climates() const { return tree_climates; }
 	uint16 get_no_tree_climates() const { return no_tree_climates; }
-	uint16 get_tree() const { return tree; }
-	void set_tree(uint16 i) { tree = i; }
+	tree_distribution_t get_tree_distribution() const { return (tree_distribution_t)tree_distribution; }
+	void set_tree_distribution(tree_distribution_t value) { tree_distribution = value; }
 
 	void set_default_climates();
-	sint8 get_climate_borders( sint8 climate, sint8 start_end ) const { return climate_borders[climate][start_end]; }
+	sint8 get_climate_borders( sint8 climate, sint8 start_end ) const { return (sint8)climate_borders[climate][start_end]; }
 
 	sint8 get_tropic_humidity() const { return tropic_humidity; }
 	sint8 get_desert_humidity() const { return desert_humidity; }
@@ -603,6 +638,10 @@ public:
 
 	sint8 get_lakeheight() const { return lake_height; }
 	void set_lakeheight(sint8 h) { lake_height = h; }
+
+	/// Wind is coming from this direction
+	ribi_t::ribi get_wind_dir() const { return wind_direction;  }
+	ribi_t::ribi get_approach_dir() const { return wind_direction | ribi_t::rotate90(wind_direction);  }
 
 	sint8 get_patch_size_percentage() const { return patch_size_percentage; }
 
@@ -650,6 +689,8 @@ public:
 	void set_advance_to_end(bool b) { advance_to_end = b; }
 	
 	bool get_first_come_first_serve() const { return first_come_first_serve; }
+	uint32 get_waiting_limit_for_first_come_first_serve() const 
+		{ return waiting_limit_for_first_come_first_serve; }
 	
 	uint8 get_routecost_halt() const { return routecost_halt; }
 	uint8 get_routecost_wait() const { return routecost_wait; }

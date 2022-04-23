@@ -211,10 +211,10 @@ bool route_t::find_route(karte_t *welt, const koord3d start, test_driver_t *tdri
 		const ribi_t::ribi ribi =  tdriver->get_ribi(gr)  &  ( ~ribi_t::reverse_single(tmp->ribi_from) );
 		for(  int r=0;  r<4;  r++  ) {
 			// a way goes here, and it is not marked (i.e. in the closed list)
-			grund_t* to;
-			if(  (ribi & ribi_t::nsew[r] )!=0 // do not go backwards
-			    && koord_distance(start, gr->get_pos() + koord::nsew[r])<max_depth // not too far away
-			    && gr->get_neighbour(to, wegtyp, ribi_t::nsew[r])  // is connected
+			grund_t* to = NULL;
+			if(  (ribi & ribi_t::nesw[r] )!=0 // do not go backwards
+			    && koord_distance(start, gr->get_pos() + koord::nesw[r])<max_depth // not too far away
+			    && gr->get_neighbour(to, wegtyp, ribi_t::nesw[r])  // is connected
 			    && !marker.is_marked(to) // not already tested
 			    && tdriver->check_next_tile(to, true) // can be driven on
 			) {
@@ -225,10 +225,10 @@ bool route_t::find_route(karte_t *welt, const koord3d start, test_driver_t *tdri
 				k->gr = to;
 				k->count = tmp->count+1;
 				k->f = 0;
-				k->g = tmp->g + tdriver->get_cost(to, to->get_weg(wegtyp), max_khm, ribi_t::nsew[r]);
-				k->ribi_from = ribi_t::nsew[r];
+				k->g = tmp->g + tdriver->get_cost(to, to->get_weg(wegtyp), max_khm, ribi_t::nesw[r]);
+				k->ribi_from = ribi_t::nesw[r];
 
-				uint8 current_dir = ribi_t::nsew[r];
+				uint8 current_dir = ribi_t::nesw[r];
 				if(tmp->parent!=NULL) {
 					current_dir |= tmp->ribi_from;
 					if(tmp->dir!=current_dir) {
@@ -326,7 +326,7 @@ bool route_t::intern_calc_route(karte_t *welt, const koord3d ziel, const koord3d
 	 * Reference:
 	 *  Harabor D. and Grastien A. 2011. Online Graph Pruning for Pathfinding on Grid Maps.
 	 *  In Proceedings of the 25th National Conference on Artificial Intelligence (AAAI), San Francisco, USA.
-	 *  http://users.cecs.anu.edu.au/~dharabor/data/papers/harabor-grastien-aaai11.pdf
+	 *  https://users.cecs.anu.edu.au/~dharabor/data/papers/harabor-grastien-aaai11.pdf
 	 */
 	const bool use_jps     = tdriver->get_waytype()==water_wt;
 

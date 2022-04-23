@@ -1,5 +1,5 @@
 
-Simutrans Hotbar Patch (based on OTRP v30.1)
+Simutrans Hotbar Patch (based on OTRP v32.1)
 ============================================
 
 1. [機能](#機能)
@@ -9,7 +9,7 @@ Simutrans Hotbar Patch (based on OTRP v30.1)
 
 機能
 ===========
-[Simutrans OTRP v30.1](https://github.com/teamhimeh/simutrans/blob/OTRP-distribute/documentation/OTRP_v13_information.md)に以下の機能を追加しました。
+[Simutrans OTRP v32.1](https://github.com/teamhimeh/simutrans/blob/OTRP-distribute/documentation/OTRP_v13_information.md)に以下の機能を追加しました。
 
 ホットバーの追加
 ---------------
@@ -127,13 +127,8 @@ menuconf.tab 設定方法
 ==========
 Windows (GDI バックエンド) のみビルドできます。
 
-通常のOTRP版と同様に、`./configure && make` でビルドします。配布バイナリはMinGW 64bit環境でビルドしました。
-私の環境では、Makefile を以下のように書き換える必要がありました。
-
-```Makefile
-#FREETYPE_CONFIG ?= freetype-config
-FREETYPE_CONFIG ?= pkg-config freetype2
-```
+配布バイナリはMinGW 64bit環境でビルドしました。
+通常のOTRP版と同様に、`autoupdate && autoconf && ./configure && make` でビルドします。
 
 Linux / Mac OS 版をビルドしたい場合は、キーボードまわりのコード(`sys/simsys_S2.cc`) を多少加筆する必要があります。
 ソースコードのインデントが変なときは tabstop=2 を設定してください。

@@ -5,6 +5,9 @@
 
 #include "simstring.h"
 
+#include "../dataobj/translator.h"
+#include "../dataobj/environment.h"
+
 #include <assert.h>
 #include <string.h>
 #include <stdio.h>
@@ -63,7 +66,7 @@ const char *get_large_money_string()
  * Set large money abbreviation, used in money_to_string and
  * number_to_string
  */
-void set_large_amout(const char *s, const double v)
+void set_large_amount(const char *s, const double v)
 {
 	large_number_string = s;
 	large_number_factor = v;
@@ -80,6 +83,10 @@ void money_to_string(char * p, double f, const bool show_decimal)
 	char   tmp[128];
 	char   *tp = tmp;
 	int    i,l;
+
+	if(env_t::show_yen){
+		f = f * 100.0;
+	}
 
 	if(  f>1000.0*large_number_factor  ) {
 		sprintf( tp, "%.1f", f/large_number_factor );
@@ -118,7 +125,7 @@ void money_to_string(char * p, double f, const bool show_decimal)
 			*p++ = large_number_string[i];
 		}
 	}
-	else if(  show_decimal  ) {
+	else if(  show_decimal &&  !env_t::show_yen) {
 		i = l+1;
 		// only decimals for smaller numbers
 		*p++ = fraction_sep;
@@ -127,7 +134,15 @@ void money_to_string(char * p, double f, const bool show_decimal)
 			*p++ = tp[i++];
 		}
 	}
-	*p++ = '$';
+
+	if(env_t::show_yen){
+		for(i=0; translator::translate("$")[i]!=0; i++){
+			*p++ = translator::translate("$")[i];
+		}
+	}
+	else{
+		*p++ = '$';
+	}
 	*p = 0;
 }
 

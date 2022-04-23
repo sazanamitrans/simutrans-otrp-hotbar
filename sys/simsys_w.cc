@@ -22,20 +22,20 @@ extern int __argc;
 extern char **__argv;
 #endif
 
-#include "simsys_w32_png.h"
 #include "simsys.h"
 
+#include "../macros.h"
 #include "../simconst.h"
-#include "../display/simgraph.h"
 #include "../simdebug.h"
+#include "../simmem.h"
+#include "../simversion.h"
+#include "../simevent.h"
+#include "../dataobj/environment.h"
+#include "../display/simgraph.h"
 #include "../gui/simwin.h"
 #include "../gui/gui_frame.h"
 #include "../gui/components/gui_component.h"
 #include "../gui/components/gui_textinput.h"
-#include "../simmem.h"
-#include "../simversion.h"
-#include "../simevent.h"
-#include "../macros.h"
 
 // needed for wheel
 #ifndef WM_MOUSEWHEEL
@@ -53,7 +53,7 @@ extern char **__argv;
 static const LPCWSTR WINDOW_CLASS_NAME = L"Simu";
 
 static volatile HWND hwnd;
-static bool is_fullscreen = false;
+static sint16 fullscreen = WINDOWED;
 static bool is_not_top = false;
 static MSG msg;
 static RECT WindowSize = { 0, 0, 0, 0 };
@@ -143,24 +143,25 @@ static void create_window(DWORD const ex_style, DWORD const style, int const x, 
 	SetTimer( hwnd, 0, 1111, NULL ); // HACK: so windows thinks we are not dead when processing a timer every 1111 ms ...
 }
 
+static DEVMODE settings;
+
 
 // open the window
-int dr_os_open(int const w, int const h, int fullscreen)
+int dr_os_open(int const w, int const h, sint16 fs)
 {
 	MaxSize.right = ((w*x_scale)/32+15) & 0x7FF0;
 	MaxSize.bottom = (h*y_scale)/32;
+	fullscreen = fs;
 
 #ifdef MULTI_THREAD
 	InitializeCriticalSection( &redraw_underway );
 	hFlushThread = CreateThread( NULL, 0, dr_flush_screen, 0, CREATE_SUSPENDED, NULL );
 #endif
+	MEMZERO(settings);
 
 	// fake fullscreen
 	if (fullscreen) {
 		// try to force display mode and size
-		DEVMODE settings;
-
-		MEMZERO(settings);
 		settings.dmSize = sizeof(settings);
 		settings.dmFields = DM_BITSPERPEL | DM_PELSWIDTH | DM_PELSHEIGHT;
 		settings.dmBitsPerPel = COLOUR_DEPTH;
@@ -173,16 +174,15 @@ int dr_os_open(int const w, int const h, int fullscreen)
 			if(  COLOUR_DEPTH<32  ) {
 				settings.dmBitsPerPel = 32;
 			}
-			printf( "dr_os_open()::Could not reduce color depth to 16 Bit in fullscreen." );
+			dbg->warning("dr_os_open(w32)", "Could not reduce color depth to 16 Bit in fullscreen." );
 		}
 		if(  ChangeDisplaySettings(&settings, CDS_TEST)!=DISP_CHANGE_SUCCESSFUL  ) {
 			ChangeDisplaySettings( NULL, 0 );
-			fullscreen = false;
+			fullscreen = WINDOWED;
 		}
 		else {
 			ChangeDisplaySettings(&settings, CDS_FULLSCREEN);
 		}
-		is_fullscreen = fullscreen;
 	}
 	if(  fullscreen  ) {
 		create_window(WS_EX_TOPMOST, WS_POPUP, 0, 0, MaxSize.right, MaxSize.bottom);
@@ -239,7 +239,7 @@ void dr_os_close()
 	AllDibData = NULL;
 	free(AllDib);
 	AllDib = NULL;
-	if(  is_fullscreen  ) {
+	if(  fullscreen == FULLSCREEN ) {
 		ChangeDisplaySettings(NULL, 0);
 	}
 }
@@ -382,6 +382,31 @@ void dr_textur(int xp, int yp, int w, int h)
 	}
 }
 
+bool dr_has_fullscreen()
+{
+	return true;
+}
+
+sint16 dr_get_fullscreen()
+{
+	return fullscreen;
+}
+
+sint16 dr_toggle_borderless()
+{
+	if (fullscreen == WINDOWED) {
+		SetWindowLongPtr(hwnd, GWL_STYLE, WS_EX_TOPMOST);
+		SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN), SWP_SHOWWINDOW);
+		fullscreen = BORDERLESS;
+	}
+	else if (fullscreen == BORDERLESS) {
+		SetWindowLongPtr(hwnd, GWL_STYLE, WS_OVERLAPPEDWINDOW);
+		SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN), SWP_SHOWWINDOW);
+		fullscreen = WINDOWED;
+	}
+	return fullscreen;
+}
+
 
 // move cursor to the specified location
 void move_pointer(int x, int y)
@@ -397,52 +422,6 @@ void move_pointer(int x, int y)
 void set_pointer(int loading)
 {
 	SetCursor(LoadCursor(NULL, loading != 0 ? IDC_WAIT : IDC_ARROW));
-}
-
-
-/**
- * Some wrappers can save screenshots.
- * @return 1 on success, 0 if not implemented for a particular wrapper and -1
- *         in case of error.
- */
-int dr_screenshot(const char *filename, int x, int y, int w, int h)
-{
-#if defined RGB555
-	int const bpp = 15;
-#else
-	int const bpp = COLOUR_DEPTH;
-#endif
-	if (!dr_screenshot_png(filename, w, h, AllDib->bmiHeader.biWidth, (unsigned short*)AllDibData+x+y*AllDib->bmiHeader.biWidth, bpp)) {
-		// not successful => save full screen as BMP
-		if (FILE* const fBmp = dr_fopen(filename, "wb")) {
-			BITMAPFILEHEADER bf;
-
-			// since the number of drawn pixel can be smaller than the actual width => only use the drawn pixel for bitmap
-			LONG const old_width = AllDib->bmiHeader.biWidth;
-			AllDib->bmiHeader.biWidth  = display_get_width() - 1;
-			AllDib->bmiHeader.biHeight = WindowSize.bottom   + 1;
-
-			bf.bfType = 0x4d42; //"BM"
-			bf.bfReserved1 = 0;
-			bf.bfReserved2 = 0;
-			bf.bfOffBits = sizeof(BITMAPFILEHEADER) + sizeof(BITMAPINFOHEADER) + sizeof(DWORD)*3;
-			bf.bfSize      = (bf.bfOffBits + AllDib->bmiHeader.biHeight * AllDib->bmiHeader.biWidth * 2L + 3L) / 4L;
-			fwrite(&bf, sizeof(BITMAPFILEHEADER), 1, fBmp);
-			fwrite(AllDib, sizeof(AllDib->bmiHeader) + sizeof(*AllDib->bmiColors) * 3, 1, fBmp);
-
-			for (LONG i = 0; i < AllDib->bmiHeader.biHeight; ++i) {
-				// row must be always even number of pixel
-				fwrite(AllDibData + (AllDib->bmiHeader.biHeight - 1 - i) * old_width, (AllDib->bmiHeader.biWidth + 1) & 0xFFFE, 2, fBmp);
-			}
-			AllDib->bmiHeader.biWidth = old_width;
-
-			fclose(fBmp);
-		}
-		else {
-			return -1;
-		}
-	}
-	return 0;
 }
 
 
@@ -476,7 +455,7 @@ LRESULT WINAPI WindowProc(HWND this_hwnd, UINT msg, WPARAM wParam, LPARAM lParam
 			return 0;
 
 		case WM_ACTIVATE: // may check, if we have to restore color depth
-			if(is_fullscreen) {
+			if(fullscreen) {
 				// avoid double calls
 				static bool while_handling = false;
 				if(while_handling) {
@@ -490,20 +469,6 @@ LRESULT WINAPI WindowProc(HWND this_hwnd, UINT msg, WPARAM wParam, LPARAM lParam
 					EnterCriticalSection( &redraw_underway );
 #endif
 					// try to force display mode and size
-					DEVMODE settings;
-
-					MEMZERO(settings);
-					settings.dmSize = sizeof(settings);
-					settings.dmFields = DM_BITSPERPEL | DM_PELSWIDTH | DM_PELSHEIGHT;
-#ifdef RGB555
-					settings.dmBitsPerPel = 15;
-#else
-					settings.dmBitsPerPel = COLOUR_DEPTH;
-#endif
-					settings.dmPelsWidth  = MaxSize.right;
-					settings.dmPelsHeight = MaxSize.bottom;
-					settings.dmDisplayFrequency = 0;
-
 					// should be always successful, since it worked as least once ...
 					ChangeDisplaySettings(&settings, CDS_FULLSCREEN);
 					is_not_top = false;
@@ -529,7 +494,7 @@ LRESULT WINAPI WindowProc(HWND this_hwnd, UINT msg, WPARAM wParam, LPARAM lParam
 			break;
 
 		case WM_GETMINMAXINFO:
-			if(is_fullscreen) {
+			if(fullscreen) {
 				LPMINMAXINFO lpmmi = (LPMINMAXINFO) lParam;
 				lpmmi->ptMaxPosition.x = 0;
 				lpmmi->ptMaxPosition.y = 0;
@@ -605,14 +570,14 @@ LRESULT WINAPI WindowProc(HWND this_hwnd, UINT msg, WPARAM wParam, LPARAM lParam
 				sys_event.type = SIM_SYSTEM;
 				sys_event.code = SYSTEM_RESIZE;
 
-				sys_event.size_x = (LOWORD(lParam)*32)/x_scale;
-				if (sys_event.size_x <= 0) {
-					sys_event.size_x = 4;
+				sys_event.new_window_size_w = (LOWORD(lParam)*32)/x_scale;
+				if (sys_event.new_window_size_w <= 0) {
+					sys_event.new_window_size_w = 4;
 				}
 
-				sys_event.size_y = (HIWORD(lParam)*32)/y_scale;
-				if (sys_event.size_y <= 1) {
-					sys_event.size_y = 64;
+				sys_event.new_window_size_h = (HIWORD(lParam)*32)/y_scale;
+				if (sys_event.new_window_size_h <= 1) {
+					sys_event.new_window_size_h = 64;
 				}
 			}
 			break;
@@ -651,23 +616,27 @@ LRESULT WINAPI WindowProc(HWND this_hwnd, UINT msg, WPARAM wParam, LPARAM lParam
 			sys_event.code = 0;
 			sys_event.key_mod = ModifierKeys();
 
-			if (numlock) {
-				// do low level special stuff here
-				switch (wParam) {
-					case VK_NUMPAD0:   sys_event.code = '0';           break;
-					case VK_NUMPAD1:   sys_event.code = '1';           break;
-					case VK_NUMPAD3:   sys_event.code = '3';           break;
-					case VK_NUMPAD7:   sys_event.code = '7';           break;
-					case VK_NUMPAD9:   sys_event.code = '9';           break;
-					case VK_NUMPAD2:   sys_event.code = SIM_KEY_DOWN;  break;
-					case VK_NUMPAD4:   sys_event.code = SIM_KEY_LEFT;  break;
-					case VK_NUMPAD6:   sys_event.code = SIM_KEY_RIGHT; break;
-					case VK_NUMPAD8:   sys_event.code = SIM_KEY_UP;    break;
-					case VK_PAUSE:     sys_event.code = 'P'; sys_event.key_mod = 2;   break; // Pause -> ^P
-					case VK_SEPARATOR: sys_event.code = 127;           break; // delete
+			sint16 code = lParam >> 16;
+			if(  code >= 0x47  &&  code <= 0x52  &&  code != 0x4A  &&  code != 0x4e  ) {
+				if(  (GetKeyState( VK_NUMLOCK ) & 1) == 0  ||  (env_t::numpad_always_moves_map  &&  !win_is_textinput())  ) { // numlock off?
+					switch( code ) {
+						case 0x47: code = SIM_KEY_UPLEFT; break;
+						case 0x48: code = SIM_KEY_UP; break;
+						case 0x49: code = SIM_KEY_UPRIGHT; break;
+						case 0x4B: code = SIM_KEY_LEFT; break;
+						case 0x4C: code = SIM_KEY_CENTER; break;
+						case 0x4D: code = SIM_KEY_RIGHT; break;
+						case 0x4F: code = SIM_KEY_DOWNLEFT; break;
+						case 0x50: code = SIM_KEY_DOWN; break;
+						case 0x51: code = SIM_KEY_DOWNRIGHT; break;
+						case 0x52: code = SIM_KEY_NUMPAD_BASE; break;
+					}
+					if(  code>=SIM_KEY_NUMPAD_BASE  ) {
+						// ok found something
+						sys_event.code = code;
+						break;
+					}
 				}
-				// check for numlock!
-				if (sys_event.code != 0) break;
 			}
 
 			// do low level special stuff here
@@ -684,8 +653,8 @@ LRESULT WINAPI WindowProc(HWND this_hwnd, UINT msg, WPARAM wParam, LPARAM lParam
 				case VK_ESCAPE:    sys_event.code = SIM_KEY_ESCAPE; break;
 				case VK_SPACE:  sys_event.code = SIM_KEY_SPACE;     break;
 				case VK_DELETE: sys_event.code = SIM_KEY_DELETE;    break;
-				case VK_PRIOR:  sys_event.code = SIM_KEY_PGUP;      break;
-				case VK_NEXT:   sys_event.code = SIM_KEY_PGDN;      break;
+				case VK_PRIOR:  sys_event.code = '>';      break;
+				case VK_NEXT:   sys_event.code = '<';      break;
 			}
 			// check for F-Keys!
 			if (sys_event.code == 0 && wParam >= VK_F1 && wParam <= VK_F15) {
@@ -714,10 +683,21 @@ LRESULT WINAPI WindowProc(HWND this_hwnd, UINT msg, WPARAM wParam, LPARAM lParam
 		}
 
 		case WM_CHAR: /* originally KeyPress */
+		{
+			sint16 code = lParam >> 16;
+			if(  code >= 0x47  &&  code <= 0x52  &&  code != 0x4A  &&  code != 0x4e  ) {
+				if(  (GetKeyState( VK_NUMLOCK ) & 1) == 0  ||  (env_t::numpad_always_moves_map  &&  !win_is_textinput())  ) { // numlock off?
+					// we handled this numpad keys already above ...
+					sys_event.type = SIM_NOEVENT;
+					sys_event.code = 0;
+					break;
+				}
+			}
 			sys_event.type = SIM_KEYBOARD;
 			sys_event.code = wParam;
 			sys_event.key_mod = ModifierKeys();
 			break;
+		}
 
 		case WM_IME_SETCONTEXT:
 			// attempt to avoid crash at windows 1809> just not call DefWinodwsProc seems to work for SDL2 ...
@@ -920,8 +900,10 @@ LRESULT WINAPI WindowProc(HWND this_hwnd, UINT msg, WPARAM wParam, LPARAM lParam
 	if(  update_mouse  ) {
 		sys_event.key_mod = ModifierKeys();
 		sys_event.mb = last_mb = (wParam&3);
-		sys_event.mx      = (LOWORD(lParam) * 32)/x_scale;
-		sys_event.my      = (HIWORD(lParam) * 32)/y_scale;
+		sint16 x = LOWORD(lParam);
+		sys_event.mx      = (x * 32l)/x_scale;
+		sint16 y = HIWORD(lParam);
+		sys_event.my      = (y * 32l)/y_scale;
 	}
 
 
@@ -944,15 +926,6 @@ static void internal_GetEvents(bool const wait)
 
 
 void GetEvents()
-{
-	// already even processed?
-	if(sys_event.type==SIM_NOEVENT) {
-		internal_GetEvents(true);
-	}
-}
-
-
-void GetEventsNoWait()
 {
 	if (sys_event.type==SIM_NOEVENT  &&  PeekMessage(&msg, NULL, 0, 0, PM_NOREMOVE)) {
 		internal_GetEvents(false);
@@ -1035,6 +1008,13 @@ int main()
 }
 #endif
 
+
+const char* dr_get_locale()
+{
+	static char LanguageCode[5]="";
+	GetLocaleInfoA( GetUserDefaultUILanguage(), LOCALE_SISO639LANGNAME, LanguageCode, lengthof( LanguageCode ) );
+	return LanguageCode;
+}
 
 int CALLBACK WinMain(HINSTANCE const hInstance, HINSTANCE, LPSTR, int)
 {

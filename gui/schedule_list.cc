@@ -100,7 +100,9 @@ static uint8 statistic_type[MAX_LINE_COST] = {
 	MONEY
 };
 
-static int current_sort_mode = 0;
+#define MAX_SORT_IDX (4)
+static uint8 idx_to_sort_mode[MAX_SORT_IDX] = { line_scrollitem_t::SORT_BY_NAME, line_scrollitem_t::SORT_BY_PROFIT, line_scrollitem_t::SORT_BY_TRANSPORTED, line_scrollitem_t::SORT_BY_CONVOIS };
+static const char *idx_to_sort_text[MAX_SORT_IDX] = { "Name", "Revenue", "Transported", "Number of convois" };
 
 #define SCL_HEIGHT (15*LINESPACE)
 #define RIGHT_COLUMN_OFFSET (D_MARGIN_LEFT+3*D_BUTTON_WIDTH+2*D_H_SPACE+2*D_H_SPACE)
@@ -127,6 +129,7 @@ schedule_list_gui_t::schedule_list_gui_t(player_t *player_) :
 	old_schedule_filter[0] = 0;
 	last_schedule = NULL;
 	old_player = NULL;
+	current_sort_mode = 0;
 
 	// add components
 	// first column: scrolled list of all lines
@@ -191,6 +194,15 @@ schedule_list_gui_t::schedule_list_gui_t(player_t *player_) :
 	add_component(&inp_filter);
 
 	sint16 bt_y = D_MARGIN_TOP+SCL_HEIGHT+D_V_SPACE+D_EDIT_HEIGHT+D_V_SPACE ;
+
+	// sort by what
+	for( int i=0; i<MAX_SORT_IDX;  i++ ) {
+		sort_type_c.new_component<gui_scrolled_list_t::const_text_scrollitem_t>( translator::translate(idx_to_sort_text[i]), SYSCOL_TEXT) ;
+	}
+	sort_type_c.set_selection(current_sort_mode);
+	sort_type_c.set_focusable( true );
+	sort_type_c.add_listener( this );
+	add_component(&sort_type_c);
 
 	// freight type filter
 	viewable_freight_types.append(NULL);
@@ -655,7 +667,7 @@ void schedule_list_gui_t::build_line_list(int filter)
 
 	FOR(vector_tpl<linehandle_t>, const l, lines) {
 		// search name
-		if(  utf8caseutf8(l->get_name(), schedule_filter)  ) {
+		if(  !*schedule_filter  ||  utf8caseutf8(l->get_name(), schedule_filter)  ) {
 			// match good category
 			if(  is_matching_freight_catg( l->get_goods_catg_index() )  ) {
 				scl.new_component<line_scrollitem_t>(l);
@@ -665,8 +677,9 @@ void schedule_list_gui_t::build_line_list(int filter)
 			}
 		}
 	}
-
 	scl.set_selection( sel );
+
+	current_sort_mode = idx_to_sort_mode[ sort_type_c.get_selection() ];
 	line_scrollitem_t::sort_mode = (line_scrollitem_t::sort_modes_t)current_sort_mode;
 	scl.sort( 0 );
 	scl.set_size(scl.get_size());

@@ -55,9 +55,10 @@ public:
 	};
 
 	/** Constants */
-	enum { default_vehicle_length=4};
+	enum { default_vehicle_length = 4 };
 
-	enum states {INITIAL,
+	enum states {
+		INITIAL,
 		EDIT_SCHEDULE,
 		ROUTING_1,
 		DUMMY4,
@@ -297,6 +298,7 @@ private:
 	 * 0 means departure slot is not reserved.
 	 */
 	uint32 scheduled_departure_time;
+	uint32 scheduled_coupling_delay_tolerance;
 	
 	uint32 time_last_arrived;
 
@@ -322,6 +324,11 @@ private:
 
 
 	ribi_t::ribi alte_richtung;
+
+	uint8 speed_magnification;
+	uint8 acceleration_magnification;
+
+	bool in_delay_recovery;
 	
 	typedef struct {
 		bool valid;
@@ -723,15 +730,14 @@ public:
 	void open_info_window();
 
 	/**
-	* @return a description string for the object, der z.B. in einem
+	* @param[out] buf a description string for the object, der z.B. in einem
 	* Beobachtungsfenster angezeigt wird.
 	* @see simwin
 	*/
 	void info(cbuffer_t & buf) const;
 
 	/**
-	* @param buf the buffer to fill
-	* @return Freight description text (buf)
+	* @param[out] buf Filled with freight description
 	*/
 	void get_freight_info(cbuffer_t & buf);
 	void set_sortby(uint8 order);
@@ -850,7 +856,7 @@ public:
 	/* including this route_index, the route was reserved the last time
 	 * currently only used for tracks
 	 */
-	uint16 get_next_reservation_index() const {return next_reservation_index;}
+	uint16 &get_next_reservation_index() { return next_reservation_index; }
 	void set_next_reservation_index(uint16 n);
 	
 	/* these functions modify only reserved_tiles.
@@ -955,10 +961,23 @@ public:
 	
 	void set_arrived_time(uint32 t) { arrived_time = t; }
 	uint32 get_departure_time() const { return scheduled_departure_time; } // in ticks.
+	uint32 get_coupling_delay_tolerance() const { return scheduled_coupling_delay_tolerance; }
 	
 	// register journey time to the current schedule entry
 	void register_journey_time();
 	void set_time_last_arrived(uint32 t) { time_last_arrived = t; }
+
+	void toggle_delay_recovery() { in_delay_recovery = !in_delay_recovery; }
+	bool is_in_delay_recovery() const { return in_delay_recovery; }
+
+	void set_owner(player_t* p) { owner = p; }
+	void trade_convoi();
+	bool permit_trade = false;
+	void set_permit_trade(bool b) { permit_trade = b; }
+	bool get_permit_trade() const { return permit_trade; }
+	uint8 accept_player_nr = 0;
+	void set_accept_player_nr(uint8 n) { accept_player_nr = n; }
+	uint8 get_accept_player_nr() const { return accept_player_nr; }
 };
 
 #endif

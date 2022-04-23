@@ -60,7 +60,7 @@ public:
 		FORCE,   ///< function has to return, raise error if not
 		FORCEX,  ///< function has to return, raise error if not, give more opcodes
 		QUEUE,   ///< function call can be queued, return value can be propagated by call back
-		TRY,     ///< function call will not be queued, if virtual machine is suspended just return
+		TRY      ///< function call will not be queued, if virtual machine is suspended just return
 	};
 
 	/**
@@ -164,7 +164,7 @@ public:
 	 * Registers a c++ function to be available as callback.
 	 * A callback is called when a function call got suspended, resumed, and returned something.
 	 * @tparam F function signature
-	 * @param F function pointer
+	 * @param funcptr function pointer
 	 * @param name register callback under this name
 	 */
 	template<typename F>

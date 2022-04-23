@@ -7,7 +7,7 @@
 #define SIMVERSION_H
 
 
-#if defined(REVISION_FROM_FILE)  &&  !defined(REVISION)
+#ifndef REVISION
 // include external generated revision file
 #include "revision.h"
 #endif
@@ -27,7 +27,7 @@
 #define SIM_SERVER_MINOR    0
 // NOTE: increment before next release to enable save/load of new features
 
-#define OTRP_VERSION_MAJOR 30
+#define OTRP_VERSION_MAJOR 32
 #define OTRP_VERSION_MINOR 1
 // NOTE: increment OTRP_VERSION_MAJOR when the save data structure changes.
 
@@ -78,9 +78,13 @@
 #else
 #	define OTRP_VERSION_MINOR_STRING
 #endif
-# define OTRP_STRING "  OTRP v" QUOTEME(OTRP_VERSION_MAJOR) OTRP_VERSION_MINOR_STRING
+# define OTRP_STRING "Simutrans OTRP v" QUOTEME(OTRP_VERSION_MAJOR) OTRP_VERSION_MINOR_STRING
 
-#	define SIM_TITLE SAVEGAME_PREFIX VERSION_NUMBER SIM_TITLE_REVISION_STRING OTRP_STRING
+# define UNOFFICIAL_MESSAGE " Unofficial_" QUOTEME(UNOFFICIAL_REVISION)
+
+# define KUTA_MESSAGE QUOTEME(KUTA_REVISION)
+
+#	define SIM_TITLE OTRP_STRING
 
 
 /*********************** Settings related to network games ********************/

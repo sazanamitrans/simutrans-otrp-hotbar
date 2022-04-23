@@ -614,6 +614,7 @@ void gui_halt_detail_t::update_connections( halthandle_t halt )
 
 			// Line labels with color of player
 			gui_label_buf_t *lb = new_component<gui_label_buf_t>(PLAYER_FLAG | color_idx_to_rgb(line->get_owner()->get_player_color1()+env_t::gui_player_color_dark) );
+			schedule_t::get_schedule_flag_text(lb->buf(), line->get_schedule());
 			lb->buf().append( line->get_name() );
 			lb->update();
 		}
@@ -759,8 +760,8 @@ void gui_departure_board_t::update_departures(halthandle_t halt)
 	last_ticks = cur_ticks;
 
 	// iterate over all convoys stopping here
-	FOR(  slist_tpl<convoihandle_t>, cnv, halt->get_loading_convois() ) {
-		if( !cnv.is_bound()) {
+	FOR(  vector_tpl<convoihandle_t>, cnv, halt->get_loading_convois() ) {
+		if( !cnv.is_bound()  ||  cnv->get_state()!=convoi_t::LOADING  ) {
 			continue;
 		}
 		halthandle_t next_halt = cnv->get_schedule()->get_next_halt(cnv->get_owner(),halt);

@@ -153,3 +153,59 @@ Do not load cargos until the departure time comes.
 発車時刻になるまで積載しません．
 hlf_chk_include_public
 公共駅を含める
+#------円表記------
+$
+ 円
+(%d$/km %d$/m)
+ (%d$/km %d$/月)
+Cost: %8s (%d$/km %d$/m)\n
+費用: %s (%d 円/㎞ %d 円/月)\n
+Cost: %8s (%d$/km)\n
+費用: %8s (%d 円/km)\n
+(%d$/km)
+(%d 円/km)
+#------送金関連------
+Sending money
+送金
+Sending money to another player
+他のプレイヤーに送金
+Show finances for transport type
+輸送タイプごとに表示する
+#------乗車区間------
+transfer interval
+乗車区間を区切る(I)
+Passengers who boarded outside the section get off at this stop.
+区間外からの乗客はこの停留所で降車します
+#------回復運転------
+recovery
+回復運転
+Recovery operation will be carried out.
+回復運転を実施します
+#------乗降時間制御------
+Full Get on/off Time
+乗降時間制御(G)
+Always use maximum boarding and alighting time, regardless of boardings and alightings.
+乗降数に関わらず、常に最大乗降時間を使用します
+#------運行中編成のコピー------
+Copy this convoi
+この編成をコピーします
+Paste Convoi
+編成を貼り付け
+Paste the copied convoi
+コピー済みの編成を貼り付けます
+#------車両譲渡機能------
+Permit Trade
+譲渡許可
+Accept Trade
+譲渡受け入れ
+Permit trade this convoi
+この車両の譲渡を許可します
+Accept trade this convoi
+この車両を受け入れます
+Permitted
+譲渡許可済み
+#------その他の翻訳------
+next stop
+次の駅へ
+Max. wayobj speed:
+架線速度:

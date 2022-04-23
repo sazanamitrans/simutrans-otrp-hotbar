@@ -389,7 +389,7 @@ transport_type finance_t::translate_waytype_to_tt(const waytype_t wt)
 #define OLD_MAX_PLAYER_HISTORY_MONTHS  (12) // number of months to keep history
 
 enum player_cost {
-	COST_CONSTRUCTION=0,     // Construction
+	COST_CONSTRUCTION = 0,   // Construction
 	COST_VEHICLE_RUN,        // Vehicle running costs
 	COST_NEW_VEHICLE,        // New vehicles
 	COST_INCOME,             // Income
@@ -407,7 +407,7 @@ enum player_cost {
 	COST_TRANSPORTED_GOOD,
 	COST_ALL_CONVOIS,        // number of convois
 	COST_SCENARIO_COMPLETED, // scenario success (only useful if there is one ... )
-	COST_WAY_TOLLS,
+	COST_WAY_TOLLS
 	// OLD_MAX_PLAYER_COST = 19
 };
 

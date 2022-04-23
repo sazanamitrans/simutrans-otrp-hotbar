@@ -42,9 +42,9 @@ void interaction_t::move_view( const event_t &ev )
 
 	// move the mouse pointer back to starting location => infinite mouse movement
 	if(  (ev.mx - ev.cx) != 0  ||  (ev.my-ev.cy) !=0  ) {
-#ifdef __BEOS__
 		change_drag_start(ev.mx - ev.cx, ev.my - ev.cy);
-#else
+#if 0
+		// move pointer catches the mouse inside the windows but is incompatible with any touch based scolling
 		move_pointer(ev.cx, ev.cy);
 #endif
 	}
@@ -82,7 +82,7 @@ void interaction_t::move_cursor( const event_t &ev )
 		if (!tool->move_has_effects()) {
 			is_dragging = false;
 		}
-		else if(  !env_t::networkmode  ||  tool->is_move_network_save(world->get_active_player())) {
+		else if(  !env_t::networkmode  ||  tool->is_move_network_safe(world->get_active_player())) {
 			tool->flags = event_get_last_control_shift() | tool_t::WFL_LOCAL;
 			if(tool->check_pos( world->get_active_player(), zeiger->get_pos() )==NULL) {
 				if(  ev.button_state == 0  ) {
@@ -119,7 +119,7 @@ void interaction_t::move_cursor( const event_t &ev )
 
 
 void interaction_t::interactive_event( const event_t &ev )
- {
+{
 	if(ev.ev_class == EVENT_KEYBOARD) {
 		DBG_MESSAGE("interaction_t::interactive_event()","Keyboard event with code %d '%c'", ev.ev_code, (ev.ev_code>=32  &&  ev.ev_code<=126) ? ev.ev_code : '?' );
     /* #ifdef ENABLE_HOTBAR */
@@ -151,38 +151,34 @@ void interaction_t::interactive_event( const event_t &ev )
     /* #end */
 		switch(ev.ev_code) {
 			// cursor movements
-			case '9':
+			case SIM_KEY_UPRIGHT:
 				viewport->change_world_position(viewport->get_world_position() + koord::north);
 				world->set_dirty();
 				break;
-			case '1':
+			case SIM_KEY_DOWNLEFT:
 				viewport->change_world_position(viewport->get_world_position() + koord::south);
 				world->set_dirty();
 				break;
-			case '7':
+			case SIM_KEY_UPLEFT:
 				viewport->change_world_position(viewport->get_world_position() + koord::west);
 				world->set_dirty();
 				break;
-			case '3':
+			case SIM_KEY_DOWNRIGHT:
 				viewport->change_world_position(viewport->get_world_position() + koord::east);
 				world->set_dirty();
 				break;
-			case '6':
 			case SIM_KEY_RIGHT:
 				viewport->change_world_position(viewport->get_world_position() + koord(+1,-1));
 				world->set_dirty();
 				break;
-			case '2':
 			case SIM_KEY_DOWN:
 				viewport->change_world_position(viewport->get_world_position() + koord(+1,+1));
 				world->set_dirty();
 				break;
-			case '8':
 			case SIM_KEY_UP:
 				viewport->change_world_position(viewport->get_world_position() + koord(-1,-1));
 				world->set_dirty();
 				break;
-			case '4':
 			case SIM_KEY_LEFT:
 				viewport->change_world_position(viewport->get_world_position() + koord(-1,+1));
 				world->set_dirty();
@@ -191,8 +187,10 @@ void interaction_t::interactive_event( const event_t &ev )
 			// closing windows
 			case 27:
 			case 127:
-				// close topmost win
-				destroy_win( win_get_top() );
+				if( !IS_CONTROL_PRESSED( &ev ) && !IS_SHIFT_PRESSED( &ev ) ) {
+					// close topmost win
+					destroy_win( win_get_top() );
+				}
 				break;
 
 			case SIM_KEY_F1:
@@ -212,7 +210,7 @@ void interaction_t::interactive_event( const event_t &ev )
 			// distinguish between backspace and ctrl-H (both keycode==8), and enter and ctrl-M (both keycode==13)
 			case 8:
 			case 13:
-				if(  !IS_CONTROL_PRESSED(&ev)  ) {
+				if(  !IS_CONTROL_PRESSED(&ev)  &&  !IS_SHIFT_PRESSED(&ev)  ) {
 					// Control is _not_ pressed => Backspace or Enter pressed.
 					if(  ev.ev_code == 8  ) {
 						// Backspace
@@ -259,10 +257,10 @@ void interaction_t::interactive_event( const event_t &ev )
 			bool suspended = false; // true if execution was suspended, i.e. sent to server
 			tool_t *tool = world->get_tool(world->get_active_player_nr());
 			player_t *player = world->get_active_player();
-			// first check for visibility etc
+			tool->flags = event_get_last_control_shift();
+			// first check for visibility etc (needs already right flags)
 			const char *err = tool->check_pos( player, pos );
 			if (err==NULL) {
-				tool->flags = event_get_last_control_shift();
 				err = world->call_work(tool, player, pos, suspended);
 			}
 			if (!suspended) {
@@ -281,44 +279,35 @@ void interaction_t::interactive_event( const event_t &ev )
 	}
 
 	// mouse wheel scrolled -> rezoom
-	if (ev.ev_class == EVENT_CLICK) {
-
-		// first, we need to check cursor is valid, won't zoom otherwise
-
-		const koord3d cursor_pos = world->get_zeiger()->get_pos();
-
-		if( cursor_pos == koord3d::invalid) {
-			//ignore event
-			return;
+	if(  ev.ev_class==EVENT_CLICK  ) {
+		if(  ev.ev_code==MOUSE_WHEELUP  ) {
+			zoom_view(ev, true);
 		}
-
-		bool zoom_successful = false;
-
-		// store old screen position of centered tile
-		scr_coord s = viewport->get_screen_coord(cursor_pos, koord(0,0));
-
-		if(ev.ev_code==MOUSE_WHEELUP) {
-			if(win_change_zoom_factor(true)) {
-				zoom_successful = true;
-			}
-		}
-		else if(ev.ev_code==MOUSE_WHEELDOWN) {
-			if(win_change_zoom_factor(false)) {
-				zoom_successful = true;
-			}
-		}
-
-		// zoom can fail if we are max zoomed in/out, so:
-		if (zoom_successful) {
-			// calculate offsets such that tile under cursor is still on the same screen position
-			viewport->change_world_position(cursor_pos, koord(0,0), s);
-
-			//and move cursor to the new position under the mouse
-			move_cursor(ev);
-
-			world->set_dirty();
+		else if(  ev.ev_code==MOUSE_WHEELDOWN  ) {
+			zoom_view(ev, false);
 		}
 	}
+}
+
+void interaction_t::zoom_view(const event_t &ev, const bool isOut) {
+	const koord3d cursor_pos = world->get_zeiger()->get_pos();
+	// old screen position of centered tile
+	const scr_coord s = viewport->get_screen_coord(cursor_pos, koord(0,0));
+	
+	if(  !win_change_zoom_factor(isOut)  ) {
+		// zoom failed.
+		return;
+	}
+
+	// calculate offsets such that tile under cursor is still on the same screen position
+	if(  cursor_pos!=koord3d::invalid  ) {
+		viewport->change_world_position(cursor_pos, koord(0,0), s);
+	}
+
+	//and move cursor to the new position under the mouse
+	move_cursor(ev);
+	
+	world->set_dirty();
 }
 
 
@@ -326,61 +315,7 @@ bool interaction_t::process_event( event_t &ev )
 {
 	if(ev.ev_class==EVENT_SYSTEM  &&  ev.ev_code==SYSTEM_QUIT) {
 		// quit the program if this window is closed
-		env_t::quit_simutrans = true;
-
-		// we may be requested to save the game before exit
-		if(  env_t::server  &&  env_t::server_save_game_on_quit  ) {
-
-			// to ensure only one attempt is made
-			env_t::server_save_game_on_quit = false;
-
-			// following code quite similar to nwc_sync_t::do_coomand
-			dr_chdir( env_t::user_dir );
-
-			// first save password hashes
-			char fn[256];
-			sprintf( fn, "server%d-pwdhash.sve", env_t::server );
-			loadsave_t file;
-			if(file.wr_open(fn, loadsave_t::zipped, 1, "hashes", SAVEGAME_VER_NR )) {
-				world->rdwr_player_password_hashes( &file );
-				file.close();
-			}
-
-			// remove passwords before transfer on the server and set default client mask
-			// they will be restored in karte_t::laden
-			uint16 unlocked_players = 0;
-			for(  int i=0;  i<PLAYER_UNOWNED; i++  ) {
-				player_t *player = world->get_player(i);
-				if(  player==NULL  ||  player->access_password_hash().empty()  ) {
-					unlocked_players |= (1<<i);
-				}
-				else {
-					player->access_password_hash().clear();
-				}
-			}
-
-			// save game
-			sprintf( fn, "server%d-restore.sve", env_t::server );
-			bool old_restore_UI = env_t::restore_UI;
-			env_t::restore_UI = true;
-			world->save( fn, false, SAVEGAME_VER_NR, false );
-			env_t::restore_UI = old_restore_UI;
-		}
-		else if(  env_t::reload_and_save_on_quit  &&  !env_t::networkmode  ) {
-			// save current game, if not online
-			bool old_restore_UI = env_t::restore_UI;
-			env_t::restore_UI = true;
-
-			// construct from pak name an autosave if requested
-			std::string pak_name( "autosave-" );
-			pak_name.append( env_t::objfilename );
-			pak_name.erase( pak_name.length()-1 );
-			pak_name.append( ".sve" );
-
-			world->save( pak_name.c_str(), true, SAVEGAME_VER_NR, false );
-			env_t::restore_UI = old_restore_UI;
-		}
-		destroy_all_win(true);
+		world->stop(true);
 		return true;
 	}
 
@@ -410,6 +345,7 @@ bool interaction_t::process_event( event_t &ev )
 	else if(IS_RIGHTDRAG(&ev)) {
 		// unset following
 		world->get_viewport()->set_follow_convoi( convoihandle_t() );
+		catch_dragging();
 		move_view(ev);
 	}
 	else if(  (left_drag  ||  world->get_tool(world->get_active_player_nr())->get_id() == (TOOL_QUERY | GENERAL_TOOL))  &&  IS_LEFTDRAG(&ev)  ) {
@@ -420,13 +356,14 @@ bool interaction_t::process_event( event_t &ev )
 			left_drag = true;
 		}
 		world->get_viewport()->set_follow_convoi( convoihandle_t() );
+		catch_dragging();
 		move_view(ev);
-		ev.ev_code = EVENT_NONE;
+		ev.ev_code = IGNORE_EVENT;
 	}
 
 	if(  IS_LEFTRELEASE(&ev)  &&  left_drag  ) {
 		// show the mouse and swallow this event if we were dragging before
-		ev.ev_code = EVENT_NONE;
+		ev.ev_code = IGNORE_EVENT;
 		display_show_pointer(true);
 		left_drag = false;
 	}

@@ -11,7 +11,7 @@
 #include "linehandle_t.h"
 #include "halthandle_t.h"
 
-#include "simobj.h"
+#include "obj/simobj.h"
 #include "display/simgraph.h"
 #include "simtypes.h"
 
@@ -68,9 +68,26 @@ template<class T> class bucket_heap_tpl;
 class haltestelle_t
 {
 public:
-	enum station_flags { NOT_ENABLED=0, PAX=1, POST=2, WARE=4};
+	enum station_flags {
+		NOT_ENABLED = 0,
+		PAX         = 1 << 0,
+		POST        = 1 << 1,
+		WARE        = 1 << 2
+	};
 
-	enum stationtyp {invalid=0, loadingbay=1, railstation = 2, dock = 4, busstop = 8, airstop = 16, monorailstop = 32, tramstop = 64, maglevstop=128, narrowgaugestop=256 }; //could be combined with or!
+	// can be combined with or!
+	enum stationtyp {
+		invalid         = 0,
+		loadingbay      = 1 << 0,
+		railstation     = 1 << 1,
+		dock            = 1 << 2,
+		busstop         = 1 << 3,
+		airstop         = 1 << 4,
+		monorailstop    = 1 << 5,
+		tramstop        = 1 << 6,
+		maglevstop      = 1 << 7,
+		narrowgaugestop = 1 << 8
+	};
 
 private:
 	/// List of all halts in the game.
@@ -99,13 +116,13 @@ private:
 
 	PIXVAL status_color, last_status_color;
 	sint16 last_bar_count;
-	vector_tpl<KOORD_VAL> last_bar_height; // caches the last height of the station bar for each good type drawn in display_status(). used for dirty tile management
+	vector_tpl<scr_coord_val> last_bar_height; // caches the last height of the station bar for each good type drawn in display_status(). used for dirty tile management
 	uint32 capacity[3]; // passenger, mail, goods
 	uint8 overcrowded[256/8]; ///< bit field for each goods type (max 256)
 
 	static uint8 status_step; // NONE or SCHEDULING or REROUTING
 
-	slist_tpl<convoihandle_t> loading_here;
+	vector_tpl<convoihandle_t> loading_here;
 	sint32 last_loading_step;
 
 	koord init_pos; // for halt without grounds, created during game initialisation
@@ -120,7 +137,7 @@ public:
 	 * List of convois currently loading at this station.
 	 * May contain invalid handles!
 	 */
-	const slist_tpl<convoihandle_t> &get_loading_convois() const { return loading_here; }
+	const vector_tpl<convoihandle_t> &get_loading_convois() const { return loading_here; }
 
 	// add convoi to loading queue
 	void request_loading( convoihandle_t cnv );
@@ -202,7 +219,7 @@ public:
 		convoihandle_t reservation[2];
 	};
 
-	const slist_tpl<tile_t> &get_tiles() const { return tiles; };
+	const slist_tpl<tile_t> &get_tiles() const { return tiles; }
 
 	/**
 	 * directly reachable halt with its connection weight
@@ -372,7 +389,7 @@ public:
 	/**
 	 * Draws some nice colored bars giving some status information
 	 */
-	void display_status(KOORD_VAL xpos, KOORD_VAL ypos);
+	void display_status(sint16 xpos, sint16 ypos);
 
 	/**
 	 * sucht umliegende, erreichbare fabriken und baut daraus die
@@ -515,7 +532,12 @@ private:
 	slist_tpl<departure_t> departure_slot_table[DST_SIZE];
 	
 public:
-	enum routing_result_flags { NO_ROUTE=0, ROUTE_OK=1, ROUTE_WALK=2, ROUTE_OVERCROWDED=8 };
+	enum routing_result_flags {
+		NO_ROUTE          = 0,
+		ROUTE_OK          = 1,
+		ROUTE_WALK        = 2,
+		ROUTE_OVERCROWDED = 8
+	};
 
 	/**
 	 * Kann die Ware nicht zum Ziel geroutet werden (keine Route), dann werden
@@ -639,9 +661,7 @@ public:
 	 * Fetches goods from this halt
 	 * @param load Output parameter. Goods will be put into this list, the vehicle has to load them.
 	 * @param good_category Specifies the kind of good (or compatible goods) we are requesting to fetch from this stop.
-	 * @param amount How many units of the cargo we can fetch.
-	 * @param schedule Schedule of the vehicle requesting the fetch.
-	 * @param sp Company that's requesting the fetch.
+	 * @param requested_amount How many units of the cargo we can fetch.
 	 */
 	void fetch_goods( slist_tpl<ware_t> &load, const goods_desc_t *good_category, uint32 requested_amount, const vector_tpl<halthandle_t>& destination_halts);
 
@@ -683,14 +703,12 @@ public:
 	uint8 get_empty_lane(const grund_t *gr, convoihandle_t cnv) const;
 
 	/**
-	 * @param buf the buffer to fill
-	 * @return Goods description text (buf)
+	 * @param[out] buf Goods description text
 	 */
 	void get_freight_info(cbuffer_t & buf);
 
 	/**
-	 * @param buf the buffer to fill
-	 * @return short list of the waiting goods (i.e. 110 Wood, 15 Coal)
+	 * @param[out] buf short list of the waiting goods (i.e. 110 Wood, 15 Coal)
 	 */
 	void get_short_freight_info(cbuffer_t & buf) const;
 
