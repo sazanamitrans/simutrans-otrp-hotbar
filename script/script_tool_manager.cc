@@ -16,7 +16,6 @@
 #include "../utils/cbuffer_t.h"
 #include "../utils/searchfolder.h"
 
-
 vector_tpl<tool_exec_script_t*> script_tool_manager_t::one_click_script_tools;
 vector_tpl<tool_exec_two_click_script_t*> script_tool_manager_t::two_click_script_tools;
 
@@ -46,6 +45,7 @@ const scripted_tool_info_t* script_tool_manager_t::get_script_info(const char* p
 	if (  file.open(buf)  ) {
 		tabfileobj_t contents;
 		file.read( contents );
+		info->restart  = contents.get_int("restart", 1);
 		info->title    = contents.get_string("title", path);
 		info->menu_arg = contents.get_string("menu", "");
 		info->tooltip  = contents.get_string("tooltip", "");
@@ -102,6 +102,7 @@ void script_tool_manager_t::load_scripts(char const* path)
 	FOR(searchfolder_t, const &name, find) {
 		cbuffer_t fullname;
 		fullname.printf("%s%s",path,name);
+    dbg->message("script_tool_manager_t", "loading script %s", fullname);
 
 		tool_t *tool = load_tool(fullname);
 

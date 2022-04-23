@@ -8,6 +8,7 @@
 #include "../simmem.h"
 #include "simwin.h"
 #include "../simmenu.h"
+#include "../simevent.h"
 #include "../sys/simsys.h"
 #include "../simworld.h"
 #include "../simticker.h" // TICKER_HEIGHT
@@ -322,32 +323,8 @@ void help_frame_t::set_helpfile(const char *filename, bool resize_frame )
 		player_t *player = welt->get_active_player();
 		const char *trad_str = translator::translate( "<em>%s</em> - %s<br>\n" );
 		FOR(vector_tpl<tool_t*>, const i, tool_t::char_to_tool) {
-			char const* c = NULL;
-			char str[16];
-			switch (uint16 const key = i->command_key) {
-				case '<': c = "&lt;"; break;
-				case '>': c = "&gt;"; break;
-				case 27:  c = "ESC"; break;
-				case SIM_KEY_HOME: c = translator::translate( "[HOME]" ); break;
-				case SIM_KEY_END:  c = translator::translate( "[END]" ); break;
-				default:
-					if (key < 32) {
-						sprintf(str, "%s + %c", translator::translate("[CTRL]"), '@' + key);
-					}
-					else if (key < 256) {
-						sprintf(str, "%c", key);
-					}
-					else if (key < SIM_KEY_F15) {
-						sprintf(str, "F%i", key - SIM_KEY_F1 + 1);
-					}
-					else {
-						// try unicode
-						str[utf16_to_utf8(key, (utf8*)str)] = '\0';
-					}
-					c = str;
-					break;
-			}
-			buf.printf(trad_str, c, i->get_tooltip(player));
+      std::string c = key_to_str(i->command_key);
+			buf.printf(trad_str, c.c_str(), i->get_tooltip(player));
 		}
 		set_text( buf, resize_frame );
 	}

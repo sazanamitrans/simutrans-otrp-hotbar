@@ -6,6 +6,8 @@
 #ifndef SIMEVENT_H
 #define SIMEVENT_H
 
+#include <cstdint>
+#include <string>
 
 /* Messageverarbeitung */
 
@@ -126,6 +128,28 @@
 
 #define IS_SHIFT_PRESSED(ev) ((ev)->ev_key_mod&1u)
 #define IS_CONTROL_PRESSED(ev) (((ev)->ev_key_mod&2u)>>1)
+
+typedef enum modifier_t {
+  MODIFIER_SHIFT,
+  MODIFIER_CTRL,
+  MODIFIER_ALT,
+  MODIFIER_SUPER, /* Windows key */
+  MODIFIER_CONTEXT, /* Application Key */
+} modifier_t;
+const int NUM_MODIFIER_KEYS = 5;
+constexpr const char *modifier_key_name[] = {"SHIFT", "CTRL", "ALT", "SUPER", "CONTEXT"};
+
+typedef struct key_t {
+  uint32_t code;
+  uint32_t modifier;
+} key_t;
+
+const key_t DUMMY_KEY = {0, 0};
+
+inline bool operator==(const key_t& x, const key_t& y) { return (x.code == y.code) && (x.modifier == y.modifier); }
+
+std::string key_to_str(key_t key, bool modifier_only=false);
+key_t str_to_key(std::string key, bool modifier_only=false);
 
 /**
  * Slight explanation of event_t structure:

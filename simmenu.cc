@@ -343,54 +343,6 @@ bool check_tool_availability(const tool_t *tool, uint64 time)
 }
 
 
-static utf32 str_to_key( const char *str )
-{
-	if(  str[1]==','  ||  str[1]<=' ') {
-		return (uint8)*str;
-	}
-	else {
-		// check for utf8
-		if(  127<(uint8)*str  ) {
-			size_t len = 0;
-			utf32 const c = utf8_decoder_t::decode((utf8 const *)str, len);
-			if(str[len]==',') {
-				return c;
-			}
-		}
-		// control char
-		if(str[0]=='^') {
-			return (str[1]&(~32))-64;
-		}
-		// direct value (decimal)
-		if(str[0]=='#') {
-			return atoi(str+1);
-		}
-		// Function key?
-		if(str[0]=='F') {
-			uint8 function = atoi(str+1);
-			if(function>0) {
-				return SIM_KEY_F1+function-1;
-			}
-		}
-		// COMMA
-		if (strstart(str, "COMMA")) {
-			return ',';
-		}
-		// HOME
-		if (strstart(str, "HOME")) {
-			return SIM_KEY_HOME;
-		}
-		// END
-		if (strstart(str, "END")) {
-			return SIM_KEY_END;
-		}
-	}
-	// invalid key
-	return 0xFFFF;
-}
-
-
-
 // just fills the default tables before other tools are added
 void tool_t::init_menu()
 {
@@ -419,9 +371,9 @@ void tool_t::exit_menu()
 // for sorting: compare tool key
 static bool compare_tool(tool_t const* const a, tool_t const* const b)
 {
-	uint16 const ac = a->command_key & ~32;
-	uint16 const bc = b->command_key & ~32;
-	return ac != bc ? ac < bc : a->command_key < b->command_key;
+	uint16 const ac = a->command_key.code;
+	uint16 const bc = b->command_key.code;
+	return ac != bc ? ac < bc : a->command_key.modifier < b->command_key.modifier;
 }
 
 
@@ -735,7 +687,7 @@ void tool_t::read_menu(const std::string &objfilename)
 				// make a default tool to add the parameter here
 				addtool = new tool_dummy_t();
 				addtool->default_param = strdup(toolname);
-				addtool->command_key = 1;
+				addtool->command_key = DUMMY_KEY;
 			}
 			if(addtool) {
 				if(icon!=IMG_EMPTY) {
@@ -884,7 +836,7 @@ void toolbar_t::update(player_t *player)
 	// now (re)fill it
 	FOR(slist_tpl<tool_t*>, const w, tools) {
 		// no way to call this tool? => then it is most likely a metatool
-		if(w->command_key==1  &&  w->get_icon(player)==IMG_EMPTY) {
+		if(w->command_key==DUMMY_KEY  &&  w->get_icon(player)==IMG_EMPTY) {
 			if (char const* const param = w->get_default_param()) {
 				if(  create  ) {
 					DBG_DEBUG("toolbar_t::update()", "add metatool (param=%s)", param);

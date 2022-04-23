@@ -6,6 +6,7 @@
 #ifndef SIMINTERACTION_H
 #define SIMINTERACTION_H
 
+#include "simhotbar.h"
 
 class karte_ptr_t;
 class viewport_t;
@@ -54,6 +55,7 @@ private:
 
 	bool is_dragging;
 
+  hotbar_t *hotbar;
 public:
 	/**
 	 * Processes all the pending system events.

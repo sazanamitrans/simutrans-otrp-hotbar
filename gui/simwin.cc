@@ -61,6 +61,9 @@
 #include "scenario_info.h"
 #include "depot_frame.h"
 
+#include "../simhotbar.h"
+#include "hotbar_selector.h"
+
 #include "../simversion.h"
 
 class inthashtable_tpl<ptrdiff_t,scr_coord> old_win_pos;
@@ -113,6 +116,8 @@ bool simwin_t::operator== (const simwin_t &other) const { return gui == other.gu
 #define MAX_WIN (64)
 static vector_tpl<simwin_t> wins(MAX_WIN);
 static vector_tpl<simwin_t> kill_list(MAX_WIN);
+
+static hotbar_selector_t *hotbar_selector;
 
 static karte_t* wl = NULL; // Pointer to current world is set in win_set_world
 
@@ -1358,6 +1363,17 @@ bool check_pos_win(event_t *ev)
 		return true;
 	}
 
+  // click in hotbars?
+  if (hotbar_selector && ev->ev_class != EVENT_KEYBOARD) {
+    if (hotbar_selector->is_hit(get_mouse_x(), get_mouse_y())) {
+      if (ev->ev_class == EVENT_CLICK) {
+        hotbar_selector->on_click(get_mouse_x(), get_mouse_y(), ev);
+      }
+		  // swallow event
+      return true;
+    }
+  }
+
 	// cursor event only go to top window (but not if rolled up)
 	if(  (ev->ev_class == EVENT_KEYBOARD  ||  ev->ev_class == EVENT_STRING)  &&  !wins.empty()  ) {
 		simwin_t &win  = wins.back();
@@ -1589,6 +1605,13 @@ void win_display_flush(double konto)
 	const sint16 disp_width = display_get_width();
 	const sint16 disp_height = display_get_height();
 	const sint16 menu_height = env_t::iconsize.h;
+  // display hotbar
+  if (!hotbar_selector) {
+    hotbar_selector = new hotbar_selector_t();
+  }
+  int hotbar_y = disp_height - win_get_statusbar_height() - hotbar_selector->height();
+  hotbar_selector->set_pos(scr_coord(0, hotbar_y));
+  hotbar_selector->draw(scr_coord(0, 0));
 
 	// display main menu
 	tool_selector_t *main_menu = tool_t::toolbar_tool[0]->get_tool_selector();

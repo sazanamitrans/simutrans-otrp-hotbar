@@ -38,6 +38,7 @@
 #include "simmesg.h"
 #include "simmenu.h"
 #include "siminteraction.h"
+#include "simhotbar.h"
 
 #include "sys/simsys.h"
 #include "display/simgraph.h"
@@ -1152,7 +1153,7 @@ int simu_main(int argc, char** argv)
 	// load tool scripts
 	dbg->message("simmain()","Reading tool scripts ...");
 	dr_chdir( env_t::program_dir );
-	script_tool_manager_t::load_scripts((env_t::objfilename + "tool/").c_str());
+	script_tool_manager_t::load_scripts((env_t::program_dir + env_t::objfilename + "tool/").c_str());
 	if(  env_t::default_settings.get_with_private_paks()  ) {
 		dr_chdir( env_t::user_dir );
 		script_tool_manager_t::load_scripts(("addons/" + env_t::objfilename + "tool/").c_str());
@@ -1379,6 +1380,8 @@ DBG_MESSAGE("simmain","loadgame file found at %s",path.c_str());
 	}
 
 	dr_chdir(env_t::user_dir);
+
+  hotbar_t::hotbar->load_tab();
 
 
 	if(  loadgame==""  ||  !welt->load(loadgame.c_str())  ) {

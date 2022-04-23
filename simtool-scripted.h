@@ -6,9 +6,12 @@
 #ifndef SIMTOOL_SCRIPTED_H
 #define SIMTOOL_SCRIPTED_H
 
+#include <memory>
+
 #include "simmenu.h"
 #include "script/script.h"
 #include "utils/plainstring.h"
+#include "dataobj/clonable.h"
 
 class script_vm_t;
 class skin_desc_t;
@@ -49,15 +52,15 @@ struct scripted_tool_info_t {
 
 class exec_script_base_t {
 private:
-	/// information about tool, take ownership of pointer
-	const scripted_tool_info_t *info;
-
 	void load_script(const char* path, player_t* player);
+
 protected:
+	/// information about tool, take ownership of pointer
+	std::shared_ptr<const scripted_tool_info_t> info;
 	/// the vm, will be initialized in init()
-	script_vm_t *script;
+	std::shared_ptr<script_vm_t> script;
 	/// starts vm, sets our_player, returns true if successful
-	bool init_vm(player_t* player);
+	bool init_vm(player_t* player, bool force_restart);
 
 	template<class R>
 	const char* call_function(script_vm_t::call_type_t ct, const char* function, player_t* player, R& ret);
@@ -68,11 +71,11 @@ protected:
 	template<class R, class A1, class A2, class A3>
 	const char* call_function(script_vm_t::call_type_t ct, const char* function, player_t* player, R& ret, A1 arg1, A2 arg2, A3 arg3);
 public:
-	exec_script_base_t(const scripted_tool_info_t *i) : info(i), script(NULL) {}
+	exec_script_base_t(const scripted_tool_info_t *i) : info(i), script(NULL) { };
 	virtual ~exec_script_base_t();
 
 	void set_info(const scripted_tool_info_t *i);
-	const scripted_tool_info_t* get_info() const { return info; };
+	const std::shared_ptr<const scripted_tool_info_t> get_info() const { return info; };
 
 	void init_images(tool_t *tool) const;
 
@@ -87,11 +90,12 @@ public:
 };
 
 
-class tool_exec_script_t : public tool_t, public exec_script_base_t {
+class tool_exec_script_t : public tool_t, public exec_script_base_t, public clonable {
 protected:
 
 public:
 	tool_exec_script_t(const scripted_tool_info_t *info = NULL);
+  tool_exec_script_t *clone();
 	/// is network-safe, as calls to work-commands will be properly handled in network mode
 	bool is_init_network_safe() const OVERRIDE { return true; }
 	bool is_work_network_safe() const OVERRIDE { return true; }
@@ -104,11 +108,12 @@ public:
 	const char *get_tooltip(const player_t *pl) const OVERRIDE { return exec_script_base_t::get_tooltip(pl); }
 };
 
-class tool_exec_two_click_script_t : public two_click_tool_t, public exec_script_base_t {
+class tool_exec_two_click_script_t : public two_click_tool_t, public exec_script_base_t, public clonable {
 
 	image_id marker;
 public:
 	tool_exec_two_click_script_t(const scripted_tool_info_t *info = NULL);
+  tool_exec_two_click_script_t *clone();
 	/// is network-safe, as calls to work-commands will be properly handled in network mode
 	bool is_work_network_safe() const OVERRIDE { return true; }
 	bool is_init_network_safe() const OVERRIDE { return true; }

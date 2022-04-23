@@ -78,7 +78,7 @@ DWORD WINAPI dr_flush_screen(LPVOID lpParam);
 static long x_scale = 32;
 static long y_scale = 32;
 
-
+static bool is_textinput = false;
 
 // scale automatically
 bool dr_auto_scale(bool on_off)
@@ -454,7 +454,11 @@ static inline unsigned int ModifierKeys()
 {
 	return
 		(GetKeyState(VK_SHIFT)   < 0  ? 1 : 0) |
-		(GetKeyState(VK_CONTROL) < 0  ? 2 : 0); // highest bit set or return value<0 -> key is pressed
+		(GetKeyState(VK_CONTROL) < 0  ? 2 : 0) |
+		(GetKeyState(VK_MENU) < 0 ? 4 : 0) |
+		(GetKeyState(VK_LWIN) < 0 ? 8 : 0) |
+		(GetKeyState(VK_APPS) < 0 ? 16 : 0)
+    ; // highest bit set or return value<0 -> key is pressed
 }
 
 
@@ -626,8 +630,21 @@ LRESULT WINAPI WindowProc(HWND this_hwnd, UINT msg, WPARAM wParam, LPARAM lParam
 			break;
 		}
 
+    case WM_SYSKEYDOWN: /* fallthrough */
 		case WM_KEYDOWN: { /* originally KeyPress */
 			// check for not numlock!
+		  gui_component_t *c = win_get_focus();
+      if (c && dynamic_cast<gui_textinput_t*>(c)) {
+        if (!is_textinput) {
+          dbg->message("simsys_w", "start textinput");
+          dr_start_textinput();
+        }
+      } else {
+        if (is_textinput) {
+          dbg->message("simsys_w", "stop textinput");
+          dr_stop_textinput();
+        }
+      }
 			int numlock = (GetKeyState(VK_NUMLOCK) & 1) == 0;
 
 			sys_event.type = SIM_KEYBOARD;
@@ -646,7 +663,7 @@ LRESULT WINAPI WindowProc(HWND this_hwnd, UINT msg, WPARAM wParam, LPARAM lParam
 					case VK_NUMPAD4:   sys_event.code = SIM_KEY_LEFT;  break;
 					case VK_NUMPAD6:   sys_event.code = SIM_KEY_RIGHT; break;
 					case VK_NUMPAD8:   sys_event.code = SIM_KEY_UP;    break;
-					case VK_PAUSE:     sys_event.code = 16;            break; // Pause -> ^P
+					case VK_PAUSE:     sys_event.code = 'P'; sys_event.key_mod = 2;   break; // Pause -> ^P
 					case VK_SEPARATOR: sys_event.code = 127;           break; // delete
 				}
 				// check for numlock!
@@ -655,15 +672,20 @@ LRESULT WINAPI WindowProc(HWND this_hwnd, UINT msg, WPARAM wParam, LPARAM lParam
 
 			// do low level special stuff here
 			switch (wParam) {
-				case VK_LEFT:   sys_event.code = SIM_KEY_LEFT;  break;
-				case VK_RIGHT:  sys_event.code = SIM_KEY_RIGHT; break;
-				case VK_UP:     sys_event.code = SIM_KEY_UP;    break;
-				case VK_DOWN:   sys_event.code = SIM_KEY_DOWN;  break;
-				case VK_PRIOR:  sys_event.code = '>';           break;
-				case VK_NEXT:   sys_event.code = '<';           break;
-				case VK_DELETE: sys_event.code = 127;           break;
-				case VK_HOME:   sys_event.code = SIM_KEY_HOME;  break;
-				case VK_END:    sys_event.code = SIM_KEY_END;   break;
+				case VK_LEFT:   sys_event.code = SIM_KEY_LEFT;      break;
+				case VK_RIGHT:  sys_event.code = SIM_KEY_RIGHT;     break;
+				case VK_UP:     sys_event.code = SIM_KEY_UP;        break;
+				case VK_DOWN:   sys_event.code = SIM_KEY_DOWN;      break;
+				case VK_HOME:   sys_event.code = SIM_KEY_HOME;      break;
+				case VK_END:    sys_event.code = SIM_KEY_END;       break;
+				case VK_BACK:   sys_event.code = SIM_KEY_BACKSPACE; break;
+				case VK_TAB:    sys_event.code = SIM_KEY_TAB;       break;
+				case VK_RETURN:  sys_event.code = SIM_KEY_ENTER;    break;
+				case VK_ESCAPE:    sys_event.code = SIM_KEY_ESCAPE; break;
+				case VK_SPACE:  sys_event.code = SIM_KEY_SPACE;     break;
+				case VK_DELETE: sys_event.code = SIM_KEY_DELETE;    break;
+				case VK_PRIOR:  sys_event.code = SIM_KEY_PGUP;      break;
+				case VK_NEXT:   sys_event.code = SIM_KEY_PGDN;      break;
 			}
 			// check for F-Keys!
 			if (sys_event.code == 0 && wParam >= VK_F1 && wParam <= VK_F15) {
@@ -672,8 +694,22 @@ LRESULT WINAPI WindowProc(HWND this_hwnd, UINT msg, WPARAM wParam, LPARAM lParam
 			}
 			// some result?
 			if (sys_event.code != 0) return 0;
-			sys_event.type = SIM_NOEVENT;
-			sys_event.code = 0;
+      if (is_textinput) {
+			 sys_event.type = SIM_NOEVENT;
+			 sys_event.code = 0;
+      } else {
+        wchar_t keyname[16];
+        GetKeyNameTextW(lParam, keyname, 16);
+        if (keyname[1] == '\0') {
+			    sys_event.type = SIM_KEYBOARD;
+			    sys_event.code = keyname[0];
+			    sys_event.key_mod = ModifierKeys();
+        } else {
+          // ignore special keys e.g. SHIFT
+			    sys_event.type = SIM_NOEVENT;
+			    sys_event.code = 0;
+        }
+      }
 			break;
 		}
 
@@ -898,7 +934,9 @@ static void internal_GetEvents(bool const wait)
 	do {
 		// wait for keybord/mouse event
 		GetMessage(&msg, NULL, 0, 0);
-		TranslateMessage(&msg);
+    if (is_textinput) {
+		  TranslateMessage(&msg);
+    }
 		DispatchMessage(&msg);
 	} while(wait && sys_event.type == SIM_NOEVENT);
 
@@ -955,10 +993,12 @@ void dr_sleep(uint32 millisec)
 
 void dr_start_textinput()
 {
+  is_textinput = true;
 }
 
 void dr_stop_textinput()
 {
+  is_textinput = false;
 	HIMC immcx = ImmGetContext( hwnd );
 	ImmNotifyIME( immcx, NI_COMPOSITIONSTR, CPS_CANCEL, 0 );
 	ImmReleaseContext( hwnd, immcx );

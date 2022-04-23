@@ -16,6 +16,7 @@
 #include "simskin.h"
 #include "simworld.h"
 #include "obj/zeiger.h"
+#include "dataobj/environment.h"
 
 void export_scripted_tools(HSQUIRRELVM vm);
 
@@ -80,19 +81,19 @@ namespace script_api {
 // -- basic script handling --
 exec_script_base_t::~exec_script_base_t()
 {
-	delete info;
-	delete script;
+  // actually not needed
+	info.reset();
+	script.reset();
 }
 
 
 void exec_script_base_t::set_info(const scripted_tool_info_t *i)
 {
-	delete info;
-	info = i;
+	info.reset(i);
 }
 
 
-bool exec_script_base_t::init_vm(player_t* player)
+bool exec_script_base_t::init_vm(player_t* player, bool force_restart)
 {
 	if (get_info() == NULL) {
 		// tool probably read from menuconf.tab
@@ -101,8 +102,8 @@ bool exec_script_base_t::init_vm(player_t* player)
 			script_tool_manager_t::load_tool(tool->get_default_param(), tool);
 		}
 	}
-	if(  script==NULL  ||  (info  &&  info->restart)  ) {
-		load_script(info->path, player);
+	if (script==NULL || (info && info->restart) || force_restart) {
+		load_script(info->path.c_str(), player);
 	}
 	return script != NULL;
 }
@@ -112,13 +113,8 @@ void exec_script_base_t::load_script(const char* path, player_t* player)
 {
 	cbuffer_t buf;
 	buf.printf("script-exec-%d.log", player->get_player_nr());
-	if(  script  ) {
-		// if vm already exists, delete it.
-		delete script;
-		script = NULL;
-	}
 	// start vm
-	script = script_loader_t::start_vm("tool_base.nut", buf, path, false);
+	script.reset(script_loader_t::start_vm("tool_base.nut", buf, path, false));
 	if (script == NULL) {
 		return;
 	}
@@ -134,16 +130,15 @@ void exec_script_base_t::load_script(const char* path, player_t* player)
 	if (const char* err = script->call_script(buf)) {
 		if (strcmp(err, "suspended")) {
 			dbg->error("tool_exec_script_t::load_script", "error [%s] calling %s", err, (const char*)buf);
-			delete script;
-			script = NULL;
+      script.reset();
+      return;
 		}
 	}
 	// older versions did not support the flags parameter - correct with helper function
 	if (const char* err = script->call_function(script_vm_t::QUEUE, "correct_missing_flags_argument")) {
 		if (strcmp(err, "suspended")) {
 			dbg->error("tool_exec_script_t::load_script", "error [%s] calling correct_missing_flags_argument", err);
-			delete script;
-			script = NULL;
+      script.reset();
 		}
 	}
 }
@@ -234,6 +229,14 @@ tool_exec_script_t::tool_exec_script_t(const scripted_tool_info_t *info) : tool_
 	init_images(this);
 }
 
+tool_exec_script_t *tool_exec_script_t::clone() {
+  tool_exec_script_t *ret;
+  ret = new tool_exec_script_t(nullptr);
+  ret->info = info;
+  ret->script = script;
+  ret->init_images(ret);
+  return ret;
+}
 
 bool tool_exec_script_t::init(player_t* player)
 {
@@ -247,7 +250,7 @@ bool tool_exec_script_t::init(player_t* player)
 		cursor_area = koord(old_area.y, old_area.x);
 		cursor_offset = koord(old_area.y-1-old_offset.y, old_offset.x);
 	}
-	return init_vm(player)  &&  call_function(script_vm_t::FORCE, "init", player, res)== NULL  &&  res;
+	return init_vm(player, is_ctrl_pressed())  &&  call_function(script_vm_t::FORCE, "init", player, res)== NULL  &&  res;
 }
 
 
@@ -257,8 +260,9 @@ bool tool_exec_script_t::exit(player_t* player)
 	// exit script
 	res = call_function(script_vm_t::FORCE, "exit", player, res2) == NULL;
 	// shut down vm
-	delete script;
-	script = NULL;
+  if (!info || info->restart) {
+    script.reset();
+  }
 	return res  &&  res2;
 }
 
@@ -296,6 +300,17 @@ tool_exec_two_click_script_t::tool_exec_two_click_script_t(const scripted_tool_i
 	}
 }
 
+tool_exec_two_click_script_t *tool_exec_two_click_script_t::clone() {
+  tool_exec_two_click_script_t *ret;
+  ret = new tool_exec_two_click_script_t(nullptr);
+  ret->info = info;
+  ret->script = script;
+  ret->init_images(ret);
+	if (info  &&  info->desc) {
+		set_marker(info->desc->get_image(2) ? info->desc->get_image_id(2) : cursor);
+	}
+  return ret;
+}
 
 SQInteger script_mark_tile(HSQUIRRELVM vm); // see below
 
@@ -309,7 +324,7 @@ bool tool_exec_two_click_script_t::init(player_t* player)
 
 	needs_call_to_init = false;
 
-	res = res  &&  init_vm(player);
+	res = res  &&  init_vm(player, is_ctrl_pressed());
 	if (res) {
 		HSQUIRRELVM vm = script->get_vm();
 		// put pointer to this tool into registry
@@ -331,8 +346,9 @@ bool tool_exec_two_click_script_t::exit(player_t* player)
 	// exit script
 	res = two_click_tool_t::exit(player)  &&  call_function(script_vm_t::FORCE, "exit", player, res2) == NULL;
 	// shut down vm
-	delete script;
-	script = NULL;
+  if (!info || info->restart) {
+    script.reset();
+  }
 	return res  &&  res2;
 }
 

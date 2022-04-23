@@ -23,6 +23,7 @@
 #include "descriptor/sound_desc.h"
 #include "obj/zeiger.h"
 #include "display/viewport.h"
+#include "simhotbar.h"
 
 
 karte_ptr_t interaction_t::world;
@@ -121,9 +122,34 @@ void interaction_t::interactive_event( const event_t &ev )
  {
 	if(ev.ev_class == EVENT_KEYBOARD) {
 		DBG_MESSAGE("interaction_t::interactive_event()","Keyboard event with code %d '%c'", ev.ev_code, (ev.ev_code>=32  &&  ev.ev_code<=126) ? ev.ev_code : '?' );
-
+    /* #ifdef ENABLE_HOTBAR */
+    hotbar_size_t slot = hotbar->key_to_slot(ev.ev_code);
+    hotbar_size_t bar = hotbar->key_to_hotbar(ev.ev_code);
+    if (ev.ev_key_mod == hotbar->get_key_mod && slot >= 0) {
+      tool_t* tool = hotbar->get(slot);
+      if (tool) {
+				world->set_tool(tool, world->get_active_player());
+      }
+      return;
+    } else if (ev.ev_key_mod == hotbar->set_key_mod && slot >= 0) {
+			tool_t *tool = world->get_tool(world->get_active_player_nr());
+      hotbar->set(slot, tool);
+      return;
+    } else if (ev.ev_key_mod == hotbar->select_key_mod && bar >= 0) {
+      hotbar->select(bar);
+      if (hotbar->auto_select_tool) {
+        tool_t* tool = hotbar->get(0);
+        if (tool) {
+          world->set_tool(tool, world->get_active_player());
+        }
+      }
+      return;
+    }
+		if (hotbar->toggle_key == key_t{ev.ev_code, ev.ev_key_mod}) {
+      hotbar->visible = !hotbar->visible;
+    }
+    /* #end */
 		switch(ev.ev_code) {
-
 			// cursor movements
 			case '9':
 				viewport->change_world_position(viewport->get_world_position() + koord::north);
@@ -202,7 +228,7 @@ void interaction_t::interactive_event( const event_t &ev )
 				{
 					bool ok=false;
 					FOR(vector_tpl<tool_t*>, const i, tool_t::char_to_tool) {
-						if (i->command_key == ev.ev_code) {
+						if (i->command_key == key_t{ev.ev_code, ev.ev_key_mod}) {
 							world->set_tool(i, world->get_active_player());
 							ok = true;
 							break;
@@ -214,9 +240,10 @@ void interaction_t::interactive_event( const event_t &ev )
 						ok=true;
 					}
 #endif
-					if(!ok) {
-						help_frame_t::open_help_on( "keys.txt" );
-					}
+          // ignore unbound keys
+					// if(!ok) {
+					// 	help_frame_t::open_help_on( "keys.txt" );
+					// }
 				}
 				break;
 		}
@@ -454,6 +481,8 @@ interaction_t::interaction_t()
 {
 	viewport = world->get_viewport();
 	is_dragging = false;
+  hotbar = new hotbar_t();
+  hotbar_t::hotbar = hotbar;
 
 	// Requires a world with a view already attached!
 	assert(viewport);

@@ -14,6 +14,7 @@
 #include "dataobj/translator.h"
 
 #include "simtypes.h"
+#include "simevent.h"
 #include "display/simimg.h"
 
 /// New configurable OOP tool system
@@ -229,7 +230,7 @@ public:
 	bool no_check()           const { return flags & WFL_NO_CHK; }
 	bool can_use_gui()        const { return is_local_execution()  &&  !is_scripted(); }
 
-	uint16 command_key;// key to toggle action for this function
+	key_t command_key;// key to toggle action for this function
 
 	static vector_tpl<tool_t *> general_tool;
 	static vector_tpl<tool_t *> simple_tool;
@@ -254,7 +255,7 @@ public:
 		ok_sound = NO_SOUND;
 		offset = Z_PLAN;
 		default_param = NULL;
-		command_key = 0;
+		command_key = DUMMY_KEY;
 		cursor_centered = false;
 		flags = 0;
 		callback_id = 0;

@@ -168,6 +168,7 @@ script_vm_t::~script_vm_t()
 
 const char* script_vm_t::call_script(const char* filename)
 {
+  dbg->message("script_vm_t::call_script", filename);
 	// load script
 	if (!SQ_SUCCEEDED(sqstd_loadfile(vm, filename, true))) {
 		return "Reading / compiling script failed";

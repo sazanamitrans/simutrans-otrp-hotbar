@@ -6,6 +6,10 @@
 #include "simevent.h"
 #include "sys/simsys.h"
 #include "tpl/slist_tpl.h"
+#include "unicode.h"
+
+#include <sstream>
+#include <string>
 
 // system-independent event handling routines
 
@@ -285,4 +289,128 @@ void display_get_event(event_t* const ev)
 void queue_event(event_t *events)
 {
 	queued_events.append(events);
+}
+
+std::string key_to_str(key_t key, bool only_modifier) {
+  std::ostringstream ret;
+  for (int i = 0; i < NUM_MODIFIER_KEYS; i++) {
+    if (key.modifier & (1 << i)) {
+      ret << modifier_key_name[i] << " ";
+    }
+  }
+  if (only_modifier) {
+    return ret.str();
+  }
+  if (SIM_KEY_F1 <= key.code && key.code < SIM_KEY_F1 + 15) {
+			ret << "F" << (key.code + 1);
+  } else {
+    switch(key.code) {
+      case SIM_KEY_BACKSPACE: ret << "BACKSPACE"; break;
+      case SIM_KEY_TAB      : ret << "TAB"      ; break;
+      case SIM_KEY_ENTER    : ret << "ENTER"    ; break;
+      case SIM_KEY_ESCAPE   : ret << "ESCAPE"   ; break;
+      case SIM_KEY_SPACE    : ret << "SPACE"    ; break;
+      case SIM_KEY_DELETE   : ret << "DELETE"   ; break;
+      case SIM_KEY_UP       : ret << "UP"       ; break;
+      case SIM_KEY_DOWN     : ret << "DOWN"     ; break;
+      case SIM_KEY_RIGHT    : ret << "RIGHT"    ; break;
+      case SIM_KEY_LEFT     : ret << "LEFT"     ; break;
+      case SIM_KEY_HOME     : ret << "HOME"     ; break;
+      case SIM_KEY_END      : ret << "END"      ; break;
+      case SIM_KEY_PGUP     : ret << "PGUP"     ; break;
+      case SIM_KEY_PGDN     : ret << "PGDN"     ; break;
+      // TODO: Unicode
+      default: ret << (char) key.code;
+    }
+  }
+  return ret.str();
+}
+
+key_t str_to_key(std::string str, bool only_modifier) {
+  key_t key = {0, 0};
+  /* split at space */
+  size_t pos_start = 0;
+  for (size_t pos = 0; pos < str.length(); pos++) {
+    bool split = (str[pos] == ' ' || str[pos] == '\t' || str[pos] == ',' || pos == str.length() - 1);
+    size_t pos_end = (pos == str.length() - 1) ? pos + 1 : pos;
+    if (split && (str[pos] == ' ' || str[pos] == '\t' || only_modifier)) {
+      std::string modifier_str = str.substr(pos_start, pos_end - pos_start);
+      for (int i = 0; i < NUM_MODIFIER_KEYS; i++) {
+        if (modifier_str == modifier_key_name[i]) {
+          key.modifier |= (1 << i);
+          break;
+        }
+      }
+      pos_start = pos + 1;
+    } else if (split) {
+      std::string key_str = str.substr(pos_start, pos_end - pos_start);
+      if (key_str == "ENTER") {
+        key.code = SIM_KEY_ENTER;
+      } else if (key_str == "BACKSPACE") {
+        key.code = SIM_KEY_BACKSPACE;
+      } else if (key_str == "ESCAPE") {
+        key.code = SIM_KEY_ESCAPE;
+      } else if (key_str == "SPACE") {
+        key.code = SIM_KEY_SPACE;
+      } else if (key_str == "TAB") {
+        key.code = SIM_KEY_TAB;
+      } else if (key_str == "DELETE") {
+        key.code = SIM_KEY_DELETE;
+      } else if (key_str == "UP") {
+        key.code = SIM_KEY_UP;
+      } else if (key_str == "DOWN") {
+        key.code = SIM_KEY_DOWN;
+      } else if (key_str == "RIGHT") {
+        key.code = SIM_KEY_RIGHT;
+      } else if (key_str == "LEFT") {
+        key.code = SIM_KEY_LEFT;
+      } else if (key_str == "HOME") {
+        key.code = SIM_KEY_HOME;
+      } else if (key_str == "END") {
+        key.code = SIM_KEY_END;
+      } else if (key_str == "PGUP") {
+        key.code = SIM_KEY_PGUP;
+      } else if (key_str == "PGDN") {
+        key.code = SIM_KEY_PGDN;
+      } else if (key_str == "COMMA") {
+        key.code = ',';
+      } else if (key_str == "F1") {
+        key.code = SIM_KEY_F1;
+      } else if (key_str == "F2") {
+        key.code = SIM_KEY_F2;
+      } else if (key_str == "F3") {
+        key.code = SIM_KEY_F3;
+      } else if (key_str == "F4") {
+        key.code = SIM_KEY_F4;
+      } else if (key_str == "F5") {
+        key.code = SIM_KEY_F5;
+      } else if (key_str == "F6") {
+        key.code = SIM_KEY_F6;
+      } else if (key_str == "F7") {
+        key.code = SIM_KEY_F7;
+      } else if (key_str == "F8") {
+        key.code = SIM_KEY_F8;
+      } else if (key_str == "F9") {
+        key.code = SIM_KEY_F9;
+      } else if (key_str == "F10") {
+        key.code = SIM_KEY_F10;
+      } else if (key_str == "F11") {
+        key.code = SIM_KEY_F11;
+      } else if (key_str == "F12") {
+        key.code = SIM_KEY_F12;
+      } else if (key_str == "F13") {
+        key.code = SIM_KEY_F13;
+      } else if (key_str == "F14") {
+        key.code = SIM_KEY_F14;
+      } else if (key_str == "F15") {
+        key.code = SIM_KEY_F15;
+      } else {
+        // TODO: Unicode
+        key.code = key_str[0];
+      }
+      break;
+    }
+  }
+  dbg->message("simevent.cc str_to_key", "Key Parsed %s => %s", str.c_str(), key_to_str(key).c_str());
+  return key;
 }
