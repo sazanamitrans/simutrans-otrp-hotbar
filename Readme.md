@@ -13,6 +13,8 @@ Simutrans Hotbar Patch (based on OTRP v32.1)
 
 ホットバーの追加
 ---------------
+![ホットバー利用例](thumbnail/hotbar_slots.gif)
+
  - 画面下部にホットバー表示領域を追加します。
  - ホットバーへの登録は、ツールを選択[^1]したあと、
    - ホットバーの空いているスロットをクリック。
@@ -31,21 +33,26 @@ Simutrans Hotbar Patch (based on OTRP v32.1)
    - ヘルプの表示には、SHIFT + / もしくはF1キーを押してください。
 
 スクリプトの中断/再開/再起動
-----------------------------
+----------------------------  
+
  - 本パッチのないバージョンでは、`description.tab` に`restart=0` を記載しているのにもかかわらず、ツールを選びなおすたびにスクリプトの状態がリセットされていました。本パッチでは、`restart=0` を指定すると前回の変数などの状態を保持したまま`init()` が呼ばれます。
  - CTRL キーを押しながらスクリプトツールを選択すると、スクリプトの状態をリセットして再起動します。
  - ツールバーからスクリプトツールを再起動した場合、ホットバーに登録されたスクリプトツールは再起動されず、ホットバーのスクリプトツールを選択することで再起動以前の状態にアクセスできます[^2][^3]。 そのため、いろいろな状態のスクリプトツールをホットバーに保存しておくことができます。
  - ホットバーに保存したスクリプトツールの状態は、ホットバーのスロットからツールを削除または上書きすると、自動的に終了処理が行われメモリが解放されます。[^4]
 
+![スクリプト再開利用例](thumbnail/save_script_state.gif)
+
+(この画像は、鉄道敷設を記憶した状態のツールと、道路敷設を記憶した状態のツールの両方をホットバーに登録できることを説明しています。)
+
 ダウンロード / 導入方法
 =======================
-  1. exe をダウンロードする(Windows 版しかありません。)
-  2. Simutrans をインストールしているフォルダ(もしくはそれをコピーしたフォルダ)にexeを置く。
-  3. OTRP 版の導入が初めてなら一方通行表示用のpak をインストールする。(https://osdn.net/projects/otrp/downloads/76098/RibiArrow.zip)
-  4. 🔴 **menuconf.tab を置き換える、もしくは設定する(重要！）** 🔴
-    - **pak128(.Japan) 標準ツールバーやAHNS ツールバーを利用している場合** `(インストールフォルダー)/(pakセット)/config/menuconf.tab` を `config/pak128-toolbar/menuconf.tab`, `config/AHNS-toolbar/menuconf.tab` で置き換える。(置き換え前のファイルのバックアップを取っておくことを推奨します。)
+ 1. [リリースページ](https://github.com/sazanamitrans/simutrans-otrp-hotbar/releases/) から [Simutrans-OTRP-HotbarPatch.exe](https://github.com/sazanamitrans/simutrans-otrp-hotbar/releases/download/v1/Simutrans-OTRP-HotbarPatch.exe) をダウンロードする(Windows 版しかありません。)
+ 2. Simutrans をインストールしているフォルダ(もしくはそれをコピーしたフォルダ)にexeを置く。
+ 3. OTRP 版の導入が初めてなら一方通行表示用のpak をインストールする。(https://osdn.net/projects/otrp/downloads/76098/RibiArrow.zip)
+ 4. 🔴 **menuconf.tab を置き換える、もしくは設定する(重要！）** 🔴
+    - **pak128(.Japan) 標準ツールバーやAHNS ツールバーを利用している場合** `(インストールフォルダー)/(pakセット)/config/menuconf.tab` を [config/pak128-toolbar/menuconf.tab](https://raw.githubusercontent.com/sazanamitrans/simutrans-otrp-hotbar/OTRP/config/pak128-toolbar/menuconf.tab) または [config/AHNS-toolbar/menuconf.tab](https://raw.githubusercontent.com/sazanamitrans/simutrans-otrp-hotbar/OTRP/config/AHNS-toolbar/menuconf.tab) で置き換える。(置き換え前のファイルのバックアップを取っておくことを推奨します。)
     - **その他のツールバーを利用している場合、menuconf.tabを自分でカスタマイズしている場合、日本語キーボード以外のキーボードを利用している場合** `menuconf.tab` を編集してください。
-  5. セーブデータの形式はOTRP v30.1 と同一（なはず）です。念のためバックアップ(ry
+ 5. セーブデータの形式はOTRP v32.1 と同一（なはず）です。念のためバックアップ(ry
 
 menuconf.tab 編集方法
 ---------------------
