@@ -3,7 +3,7 @@ Simutrans Hotbar Patch (based on OTRP v32.1)
 ============================================
 
 1. [機能](#機能)
-2. [ダウンロード/導入方法](#ダウンロード導入方法)
+2. [ダウンロード/導入方法](#ダウンロード--導入方法)
 3. [設定方法](#設定方法)
 4. [ビルド方法](#ビルド方法)
 
@@ -46,7 +46,7 @@ Simutrans Hotbar Patch (based on OTRP v32.1)
 
 ダウンロード / 導入方法
 =======================
- 1. [リリースページ](https://github.com/sazanamitrans/simutrans-otrp-hotbar/releases/) から [Simutrans-OTRP-HotbarPatch.exe](https://github.com/sazanamitrans/simutrans-otrp-hotbar/releases/download/v1/Simutrans-OTRP-HotbarPatch.exe) をダウンロードする(Windows 版しかありません。)
+ 1. [リリースページ](https://github.com/sazanamitrans/simutrans-otrp-hotbar/releases/) から [**Simutrans-OTRP-HotbarPatch.exe**](https://github.com/sazanamitrans/simutrans-otrp-hotbar/releases/download/v1/Simutrans-OTRP-HotbarPatch.exe) をダウンロードする(Windows 版しかありません。)
  2. Simutrans をインストールしているフォルダ(もしくはそれをコピーしたフォルダ)にexeを置く。
  3. OTRP 版の導入が初めてなら一方通行表示用のpak をインストールする。(https://osdn.net/projects/otrp/downloads/76098/RibiArrow.zip)
  4. 🔴 **menuconf.tab を置き換える、もしくは設定する(重要！）** 🔴
