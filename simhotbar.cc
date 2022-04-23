@@ -19,12 +19,18 @@ void hotbar_t::load_tab() {
     if (str) {
 	    n_slots = (hotbar_size_t) atoi(str);
     }
+    if (n_slots > MAX_HOTBAR_SLOTS) {
+      n_slots = MAX_HOTBAR_SLOTS;
+    }
     assert(n_slots > 0);
   }
   {
 	  const char *str = contents.get("n_visible_hotbars");
     if (str) {
 	    n_visible_hotbars = (hotbar_size_t) atoi(str);
+    }
+    if (n_visible_hotbars > MAX_HOTBARS) {
+	    n_visible_hotbars = MAX_HOTBARS;
     }
     assert(n_visible_hotbars > 0);
   }
