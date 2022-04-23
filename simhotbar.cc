@@ -9,7 +9,9 @@ hotbar_t *hotbar_t::hotbar = nullptr;
 void hotbar_t::load_tab() {
   dbg->message("hotbar_t", "load hotbar tab");
 	tabfile_t hotbar_conf;
-  hotbar_conf.open("hotbar.tab");
+  if (!hotbar_conf.open("hotbar.tab")) {
+    return;
+  }
 	tabfileobj_t contents;
 	hotbar_conf.read(contents);
   {
